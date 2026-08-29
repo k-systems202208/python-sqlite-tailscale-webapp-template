@@ -1,0 +1,53 @@
+from pathlib import Path
+
+from dotenv import load_dotenv
+from flask import Flask, g
+
+from .auth import resolve_identity
+from .config import load_settings
+from .csrf import install_csrf
+from .db import close_db, ensure_user, init_db
+from .routes import bp
+from .security import install_security_headers
+
+
+def create_app(test_config=None):
+    load_dotenv()
+
+    app = Flask(__name__, instance_relative_config=False)
+    app.config.from_mapping(load_settings())
+
+    if test_config:
+        app.config.update(test_config)
+
+    data_dir = Path(app.config["APP_DATA_DIR"])
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    if not app.config.get("SECRET_KEY"):
+        secret_path = data_dir / ".secret_key"
+        if not secret_path.exists():
+            import secrets
+            secret_path.write_text(secrets.token_hex(32), encoding="utf-8")
+        app.config["SECRET_KEY"] = secret_path.read_text(encoding="utf-8").strip()
+
+    app.config.update(
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Strict",
+    )
+
+    app.teardown_appcontext(close_db)
+
+    with app.app_context():
+        init_db()
+
+    @app.before_request
+    def load_current_user():
+        identity = resolve_identity()
+        g.identity = identity
+        g.current_user = ensure_user(identity) if identity else None
+
+    install_csrf(app)
+    install_security_headers(app)
+    app.register_blueprint(bp)
+
+    return app

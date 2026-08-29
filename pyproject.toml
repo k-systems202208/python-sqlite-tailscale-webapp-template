@@ -1,0 +1,9 @@
+[project]
+name = "python-sqlite-tailscale-webapp-template"
+version = "0.1.0"
+description = "Reusable closed local web app template using Python, SQLite, and Tailscale Serve"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

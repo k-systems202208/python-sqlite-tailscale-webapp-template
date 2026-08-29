@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Authentication required · {{ config.APP_NAME }}{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Authentication required</h1>
+  <p>Use the Tailscale Serve URL, or configure <code>LOCAL_OWNER_EMAIL</code> in <code>.env</code> for direct localhost access.</p>
+</section>
+{% endblock %}
