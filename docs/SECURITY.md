@@ -1,61 +1,217 @@
-# Security model
+# セキュリティ設計
 
-## Boundary
+このテンプレートは、インターネットへ一般公開するWebサービスではなく、**自宅・社内・小規模チームなどで利用するクローズドなWebアプリ**を想定しています。
 
-The backend listens only on `127.0.0.1`. Remote clients reach it through Tailscale Serve. This is important because Tailscale identity headers must only be trusted behind a trusted local proxy path.
+ただし「Tailscaleを使っているから何をしても安全」というわけではありません。ネットワーク、アプリ、OSのそれぞれで適切な対策を行うことが重要です。
 
-The template intentionally refuses non-loopback binds in `run.py`.
+## 基本的な境界
 
-## Tailscale identity
+Pythonのバックエンドは `127.0.0.1` のみで待ち受けます。
 
-When Tailscale Serve proxies an authenticated tailnet request, it can add identity headers such as:
+```text
+外部端末
+   |
+   | Tailscale
+   v
+Tailscale Serve
+   |
+   | localhost
+   v
+127.0.0.1:8000
+   |
+   v
+Python / Flask
+```
 
-- `Tailscale-User-Login`
-- `Tailscale-User-Name`
+他の端末からアクセスする場合はTailscale Serveを経由します。
 
-The application accepts those headers only if the backend connection itself comes from loopback. A request arriving from another address cannot assert a Tailscale identity by supplying the same header names.
+この構成が重要なのは、Tailscaleから渡される利用者情報を、信頼できるローカル経路から受け取るためです。
 
-Tailscale's documentation also recommends localhost-only backend listening when identity headers are used.
+`run.py` は意図せず外部公開されることを防ぐため、localhost以外へのbindを拒否する設計になっています。
 
-## Local machine trust
+## Tailscaleの利用者情報
 
-Any process already running with sufficient access on the same host can potentially reach localhost and imitate proxy headers. The host operating system is therefore part of the trust boundary. Keep the host patched and do not run untrusted software under the same user/session.
+Tailscale Serveは、認証されたtailnet利用者からのアクセスをバックエンドへ転送するとき、次のような利用者情報ヘッダーを追加できます。
 
-## Browser protections
+```text
+Tailscale-User-Login
+Tailscale-User-Name
+```
 
-The template enables:
+テンプレートでは、バックエンドへの接続元がloopback（localhost）の場合だけ、これらのヘッダーを利用者情報として受け入れます。
 
-- CSRF tokens for state-changing requests
-- `SameSite=Strict` and `HttpOnly` session cookies
-- Content Security Policy
-- frame denial
-- MIME sniffing protection
-- no-referrer policy
-- `no-store` for HTML/JSON responses
+これにより、別の端末から同じ名前のHTTPヘッダーを勝手に付けてTailscale利用者になりすますことを防ぎます。
 
-## Network exposure rules
+Tailscaleの利用者情報ヘッダーを使う場合、バックエンドをlocalhostだけで待ち受ける構成は重要です。
 
-Recommended:
+## ホストPC自体もセキュリティ境界の一部
 
-- keep the app on `127.0.0.1`
-- use Tailscale Serve
-- restrict tailnet access with grants/ACLs
-- use OS disk permissions and backups for the SQLite database
+このアプリを動かしているPC上で、十分な権限を持つ別プロセスが動いている場合、そのプロセスはlocalhostへアクセスできる可能性があります。
 
-Avoid:
+つまり、TailscaleやWebアプリだけでなく、**ホストPC自体も信頼する必要があります。**
 
-- `0.0.0.0` binding
-- router port forwarding
-- DMZ exposure
-- Tailscale Funnel for private-only applications
-- placing `app.db`, `.env`, or `data/` in Git
+基本的には次の点を守ってください。
 
-## Authorization
+- OSを更新する
+- 不審なソフトウェアを実行しない
+- PCのログインを適切に保護する
+- SQLiteファイルや `.env` のアクセス権を適切に管理する
 
-Authentication answers "who is this?" Authorization answers "what may they do?" The sample app enforces ownership in SQL queries (`owner_user_id`). Carry this pattern into your own tables.
+## ブラウザからの攻撃への対策
 
-For roles or feature-level permissions, add application roles in SQLite or use Tailscale grants/app capabilities as an advanced extension. Do not rely only on hiding buttons in the UI.
+テンプレートでは、初期状態で次の対策を行っています。
 
-## Secrets
+- POST / PUT / PATCH / DELETEへのCSRF対策
+- セッションCookieの `HttpOnly`
+- セッションCookieの `SameSite=Strict`
+- Content Security Policy（CSP）
+- iframe等への埋め込み防止
+- MIME sniffing防止
+- Referrer情報の抑制
+- HTML / JSONレスポンスの `no-store`
+- JinjaによるHTMLエスケープ
+- 不要なCORSを有効化しない
 
-A random Flask session secret is generated into `data/.secret_key` when `APP_SECRET_KEY` is not supplied. `data/` is gitignored. Production-like installations can instead provide `APP_SECRET_KEY` through the environment.
+自分のアプリへカスタマイズするときも、特別な理由がなければこれらを削除しないことを推奨します。
+
+## ネットワーク公開について
+
+### 推奨する構成
+
+```text
+Python / Flask
+    127.0.0.1
+        ↓
+Tailscale Serve
+        ↓
+許可された端末
+```
+
+推奨事項:
+
+- アプリは `127.0.0.1` のまま利用する
+- 外部端末からはTailscale Serveを利用する
+- 必要に応じてTailscaleのGrants / ACLsでアクセスを制限する
+- SQLiteファイルをOSのアクセス権とバックアップで保護する
+
+### 避ける構成
+
+このテンプレートをクローズドなアプリとして利用する場合、次の設定は基本的に避けてください。
+
+- `0.0.0.0` での待ち受け
+- ルーターのポート開放
+- DMZへの公開
+- プライベート用途でのTailscale Funnel
+- `app.db` のGitHubへの登録
+- `.env` のGitHubへの登録
+- `data/` のGitHubへの登録
+
+特に `.env` やSQLiteには、アプリ固有の設定や利用者データが含まれる可能性があります。
+
+## 認証と認可の違い
+
+セキュリティを考えるうえで重要なのが、**認証（Authentication）と認可（Authorization）は別物**という点です。
+
+```text
+認証
+「この人は誰か？」
+       ↓
+認可
+「この人は何をしてよいか？」
+```
+
+Tailscaleで利用者を確認できても、その利用者がアプリ内のすべてのデータを操作してよいとは限りません。
+
+サンプルアプリでは、SQLで `owner_user_id` を条件に含めることで、自分のデータだけを操作できるようにしています。
+
+この考え方は、自分のテーブルを追加するときも維持してください。
+
+### 悪い例
+
+画面上で削除ボタンを非表示にするだけ。
+
+利用者がAPIを直接呼べば削除できてしまう可能性があります。
+
+### 良い例
+
+画面だけでなく、Pythonの処理やSQLでも「この利用者に操作権限があるか」を確認します。
+
+## 管理者などの権限を追加する場合
+
+アプリによっては、次のような権限が必要になることがあります。
+
+```text
+管理者
+  ├─ 全データ参照
+  ├─ 登録
+  ├─ 更新
+  └─ 削除
+
+一般利用者
+  ├─ 自分のデータ参照
+  ├─ 登録
+  └─ 自分のデータ更新
+```
+
+その場合は、SQLiteへロールや権限情報を追加してアプリ側で判定できます。
+
+より高度な構成ではTailscale Grants / app capabilitiesとの連携も考えられますが、小規模アプリではまずアプリ側のシンプルなロール管理から始める方法で十分です。
+
+## 秘密情報の管理
+
+Flaskのセッションには秘密鍵が必要です。
+
+`APP_SECRET_KEY` が設定されていない場合、このテンプレートはランダムな秘密鍵を生成して次へ保存します。
+
+```text
+data/.secret_key
+```
+
+`data/` は `.gitignore` に含まれているため、通常はGitHubへアップロードされません。
+
+より本格的な運用では、環境変数として `APP_SECRET_KEY` を設定することもできます。
+
+秘密鍵をREADME、ソースコード、Issueなどへ直接記載しないでください。
+
+## SQLiteデータの保護
+
+SQLiteのデータは次に保存されます。
+
+```text
+data/app.db
+```
+
+このファイルが失われると、アプリのデータも失われる可能性があります。
+
+セキュリティには「他人に見せない」だけでなく、**データを失わないこと**も含まれます。
+
+実運用では定期的なバックアップを推奨します。
+
+## カスタマイズ時のチェックポイント
+
+新しい機能を追加したら、最低限次を確認してください。
+
+- 他の利用者のデータをURLやAPIから直接参照できないか
+- 他の利用者のIDを指定して更新・削除できないか
+- 更新APIにCSRF対策があるか
+- 入力した文字列がそのままHTMLとして実行されないか
+- `.env` や `data/` がGit管理対象になっていないか
+- アプリが `127.0.0.1` 以外で待ち受けていないか
+- Tailscaleで必要以上の利用者へ公開していないか
+
+## 最後に
+
+このテンプレートの基本方針は、次の3段階で守ることです。
+
+```text
+Tailscale
+「アプリまで到達できる人を制限」
+        ↓
+Python / Flask
+「利用者ができる操作を制限」
+        ↓
+SQLite / OS
+「保存データを保護」
+```
+
+どれか一つだけに依存するのではなく、それぞれを組み合わせることで、シンプルながら安全性を考慮したクローズドWebアプリを構築できます。
