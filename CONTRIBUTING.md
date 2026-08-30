@@ -10,82 +10,102 @@
 2. **mainへ取り込む変更単位ごとにIssueを作成します。**
 3. **Issueのタイトル・本文は日本語で記載します。**
 4. Issueに対応する作業ブランチを作成します。
-5. 作業ブランチで変更・テスト・Commit / Pushします。
-6. **必ずPull Requestを作成します。**
-7. PR本文からIssueを `Closes #番号` などで関連付けます。
-8. CI成功と差分を確認してからmainへMergeします。
-9. READMEや関連docsへの影響がある場合は同じPRで最新化します。
+5. **ブランチ名にはIssue番号を含めます。**
+6. 作業ブランチで変更・テスト・Commit / Pushします。
+7. **必ずPull Requestを作成します。**
+8. PR本文からIssueを `Closes #番号` で関連付けます。
+9. CI成功と差分を確認してからmainへ取り込みます。
+10. **mainへの取り込みは原則Squash Mergeとします。**
+11. Merge後は対応IssueをCloseし、作業ブランチを削除します。
+12. READMEや関連docsへの影響がある場合は同じPRで最新化します。
 
 READMEの誤字、コメント、軽微な文言変更、ドキュメントだけの変更も例外ではありません。
 
 ```text
 日本語Issue
    ↓
-作業Branch
+Issue番号入りBranch
+   ↓
+実装・テスト
    ↓
 Commit / Push
    ↓
 Pull Request
    ↓
-CI・確認
+CI・差分確認
    ↓
-mainへMerge
+Squash Merge
+   ↓
+Issue Close
+   ↓
+Branch削除
 ```
 
-## Issueの書き方
+## Issue
 
-Issueは変更理由と完了条件を残す作業票として使います。
+Issueは変更理由と完了条件を残す作業票です。GitHubで新規Issueを作成するときは `.github/ISSUE_TEMPLATE/change-request.md` を使用します。
 
-```markdown
-## 目的
-なぜ変更するのか。
+原則として **1 Issue = 1 PR** とします。大きな変更は複数Issueへ分割し、1つのPRへ無関係な変更をまとめません。
 
-## 対応内容
-- 変更内容
+## ブランチ命名規則
 
-## 影響範囲
-- 対象機能
-- DB / 設定 / セキュリティへの影響
+ブランチ名にはIssue番号を必ず含めます。
 
-## 完了条件
-- 完了と判断できる条件
-- 必要なテスト
-- 必要なドキュメント更新
+```text
+feat/12-inventory-search
+fix/18-user-isolation
+docs/23-update-readme
+refactor/31-item-service
+test/42-add-auth-tests
 ```
 
-原則として1 Issueに対して1 PRでmainへ取り込みます。
+推奨プレフィックス：
 
-## Pull Requestで最低限記載すること
+- `feat/`：機能追加
+- `fix/`：不具合修正
+- `docs/`：ドキュメント
+- `refactor/`：内部整理
+- `test/`：テスト
+- `chore/`：設定・依存関係・保守
 
-```markdown
-## 対応Issue
+## Pull Request
+
+PR作成時は `.github/pull_request_template.md` が表示されます。対応Issue、変更内容、テスト、影響範囲、DB・設定・セキュリティ影響、ドキュメント更新状況を記載してください。
+
+PR本文では原則次を使います。
+
+```text
 Closes #123
-
-## 変更内容
-- 何を変更したか
-
-## テスト
-- 実行したテスト
-- 手動確認内容
-
-## 影響範囲
-- 主な変更ファイル
-- 影響する機能
-
-## 注意事項
-- DB変更の有無
-- .env.example変更の有無
-- requirements変更の有無
-- 認証・セキュリティへの影響
-
-## ドキュメント
-- README更新の要否
-- 関連docs更新の要否
 ```
+
+これにより、PRがmainへMergeされたとき対応Issueを自動Closeできます。
+
+## Merge方式
+
+**原則Squash Mergeを使用します。**
+
+作業ブランチ内で複数Commitがあっても、mainにはPR単位の1Commitとして取り込みます。これによりmainの履歴をIssue / PR単位で読みやすく保ちます。
+
+例：
+
+```text
+PR #24 在庫一覧に検索機能を追加
+  ├─ feat: 検索API追加
+  ├─ test: テスト追加
+  └─ docs: README更新
+
+        ↓ Squash Merge
+
+main
+  └─ 在庫一覧に検索機能を追加 (#24)
+```
+
+特殊な理由がない限りMerge Commit / Rebase Mergeは使用しません。
 
 ## Merge前チェック
 
 - 対応する日本語Issueがある
+- ブランチ名にIssue番号が含まれている
 - PRとIssueが関連付いている
 - mainへの直接Commitではない
 - 意図しないファイル変更がない
@@ -98,6 +118,37 @@ Closes #123
 - CSRFやセキュリティヘッダーを壊していない
 - DB変更時は既存データへの影響を確認した
 - READMEや関連docsが最新になっている
+- Squash Mergeを選択している
+
+## Merge後
+
+Merge後は次を行います。
+
+```text
+Issue Close（Closesで通常は自動）
+   ↓
+作業ブランチ削除
+   ↓
+ローカルmainへ切り替え
+   ↓
+Fetch / Pull
+```
+
+GitHubリポジトリ設定で **Automatically delete head branches** を有効にすることを推奨します。
+
+## GitHub側で推奨するmain保護
+
+ドキュメント上のルールだけでなく、GitHub側でもmainを保護することを推奨します。
+
+最低限、次を設定します。
+
+- Pull Request経由の変更を必須にする
+- required status checksでCI成功を必須にする
+- conversation resolutionを必須にする
+- force pushを禁止する
+- branch deletionを禁止する
+
+リポジトリの権限やプランによって表示される設定項目が異なる場合があります。詳細は [docs/DEVELOPMENT-DEPLOYMENT.md](docs/DEVELOPMENT-DEPLOYMENT.md) を参照してください。
 
 ## テスト
 
