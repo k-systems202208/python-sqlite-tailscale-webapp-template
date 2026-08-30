@@ -57,6 +57,7 @@ READMEを入口として、目的に応じて次のドキュメントへ進ん�
 
 | ドキュメント | 内容 |
 | --- | --- |
+| [新規開発スタートガイド](docs/GETTING-STARTED.md) | 自分用リポジトリの作成、GitHub DesktopでのClone、初期起動、ChatGPT / Codexを使った開発、CI、Pull、実機確認までの手順 |
 | [アーキテクチャ](docs/ARCHITECTURE.md) | Python / Flask / SQLite / Tailscaleの役割、全体構成、変更してよい部分と残すべき共通基盤 |
 | [カスタマイズガイド](docs/CUSTOMIZE.md) | サンプルの `items` を自分のアプリへ置き換える手順、DB・API・画面・利用者モデルの変更方法 |
 | [セキュリティ設計](docs/SECURITY.md) | localhost限定、Tailscale利用者識別、CSRF、認証・認可、秘密情報・SQLiteの保護 |
@@ -64,7 +65,7 @@ READMEを入口として、目的に応じて次のドキュメントへ進ん�
 | [コントリビューションガイド](CONTRIBUTING.md) | ブランチ、テスト、Pull Request、Gitへ登録してはいけない情報などの開発ルール |
 | [ライセンス](LICENSE) | MIT Licenseの全文 |
 
-初めて使う場合は、**README → カスタマイズガイド → 開発・CI・ローカル反映・デプロイ運用** の順に読むと全体を理解しやすくなります。
+初めて使う場合は、**README → 新規開発スタートガイド → カスタマイズガイド → 開発・CI・ローカル反映・デプロイ運用 → セキュリティ設計** の順に読むと、導入から開発・運用まで理解しやすくなります。
 
 ---
 
@@ -101,6 +102,9 @@ cd python-sqlite-tailscale-webapp-template
 ```
 
 Gitを使わない場合は、GitHubの **Code → Download ZIP** からダウンロードして展開しても構いません。
+
+> **新しいアプリの開発を始める場合**  
+> 元テンプレートを直接編集するのではなく、自分用のGitHubリポジトリを作成してから開発を開始することを推奨します。詳しくは [新規開発スタートガイド](docs/GETTING-STARTED.md) を参照してください。
 
 ---
 
@@ -304,6 +308,7 @@ app/static/
 
 より詳しい説明は次を参照してください。
 
+- [新規開発スタートガイド](docs/GETTING-STARTED.md)
 - [カスタマイズガイド](docs/CUSTOMIZE.md)
 - [アーキテクチャ](docs/ARCHITECTURE.md)
 - [セキュリティ](docs/SECURITY.md)
@@ -332,10 +337,11 @@ python-sqlite-tailscale-webapp-template/
 │  └─ app.db              実行時に作成されるSQLite DB
 │
 ├─ docs/
-│  ├─ ARCHITECTURE.md
-│  ├─ CUSTOMIZE.md
-│  ├─ DEVELOPMENT-DEPLOYMENT.md
-│  └─ SECURITY.md
+│  ├─ GETTING-STARTED.md         新規開発開始手順（ChatGPT / Codex対応）
+│  ├─ ARCHITECTURE.md            アーキテクチャ
+│  ├─ CUSTOMIZE.md               カスタマイズ方法
+│  ├─ DEVELOPMENT-DEPLOYMENT.md  開発・CI・デプロイ運用
+│  └─ SECURITY.md                セキュリティ設計
 │
 ├─ scripts/
 │  ├─ bootstrap.*         初期セットアップ
@@ -511,6 +517,14 @@ GitHubへpushすると、GitHub Actionsでも自動テストが実行されま�
 
 はい。Tailscale経由の利用者を識別し、ユーザー単位でデータを分離できる構造をサンプル実装しています。
 
+### ChatGPTとCodexのどちらを使えばよいですか？
+
+どちらか一方に固定する必要はありません。要件整理や設計相談、軽微なGitHub修正にはChatGPT、本格的な実装や複数ファイル変更にはCodexを使うなど、用途に応じて併用できます。詳しくは [新規開発スタートガイド](docs/GETTING-STARTED.md) を参照してください。
+
+### ChatGPTがGitHubを修正したらローカルPCも自動更新されますか？
+
+いいえ。標準運用ではGitHub DesktopなどでFetch / PullしてローカルPCへ反映します。将来、自動デプロイを導入することは可能です。詳しくは [開発・CI・ローカル反映・デプロイ運用](docs/DEVELOPMENT-DEPLOYMENT.md) を参照してください。
+
 ### 本当にインターネットへ公開されませんか？
 
 このテンプレートの標準構成ではPythonサーバーをlocalhostに限定し、Tailscale Serveを使います。ただし、利用者がネットワーク設定やソースコードを変更した場合はその限りではありません。
@@ -542,6 +556,8 @@ http://127.0.0.1:8000
 を開いてください。
 
 まずローカルで動作確認し、その後必要になったらTailscaleを追加するのがおすすめです。
+
+新しいアプリの開発へ進む場合は、次に [新規開発スタートガイド](docs/GETTING-STARTED.md) を参照してください。
 
 ---
 
