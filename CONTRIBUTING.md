@@ -4,11 +4,67 @@
 
 ## 基本的な流れ
 
-1. `main` から作業用ブランチを作成します。
-2. 可能な限り、共通基盤の変更とサンプル機能の変更を分けます。
-3. 認証・認可・利用者ごとのデータ分離に影響する変更では、テストを追加または更新します。
-4. `python -m pytest` を実行してテストが成功することを確認します。
-5. Pull Requestを作成し、変更内容とセキュリティ／動作環境への影響を説明します。
+1. `main` を最新化します。
+2. `main` から作業用ブランチを作成します。
+3. 可能な限り、共通基盤の変更とサンプル機能の変更を分けます。
+4. 認証・認可・利用者ごとのデータ分離に影響する変更では、テストを追加または更新します。
+5. `python -m pytest` を実行してテストが成功することを確認します。
+6. 作業ブランチをPushします。
+7. Pull Requestを作成し、CI・差分・影響範囲を確認します。
+8. 問題なければmainへMergeします。
+
+Pull Requestの作り方、本文の書き方、Draft PR、CI、レビュー、Merge方法、Merge後のPullまでの詳しい手順は [docs/DEVELOPMENT-DEPLOYMENT.md](docs/DEVELOPMENT-DEPLOYMENT.md) を参照してください。
+
+## Pull Requestで最低限記載すること
+
+PR本文には、少なくとも次を記載してください。
+
+```markdown
+## 変更内容
+- 何を変更したか
+
+## 変更理由
+- なぜ変更したか
+
+## テスト
+- 実行したテスト
+- 手動確認内容
+
+## 影響範囲
+- 主な変更ファイル
+- 影響する機能
+
+## 注意事項
+- DB変更の有無
+- .env.example変更の有無
+- requirements変更の有無
+- 認証・セキュリティへの影響
+```
+
+特に次の変更では、影響を明記してください。
+
+- SQLiteスキーマ
+- `.env` / `.env.example`
+- `requirements.txt`
+- 認証・認可
+- Tailscale / localhost制約
+- CSRF
+- セキュリティヘッダー
+
+## Pull Requestで確認すること
+
+Merge前に次を確認します。
+
+- 意図しないファイル変更がない
+- `.env` や実データが含まれていない
+- 必要なテストが追加・更新されている
+- CIが成功している
+- 認証・認可を弱めていない
+- 他利用者のデータへアクセスできる変更になっていない
+- `0.0.0.0` へのbind変更がない
+- CSRFやセキュリティヘッダーを壊していない
+- DB変更時は既存データへの影響を確認した
+- READMEや関連docsの更新が必要なら反映した
 
 ## テスト
 
@@ -55,4 +111,4 @@ SQLiteデータベースファイル
 
 アプリ固有の機能は、できるだけサンプル／カスタマイズ可能な層へ配置することを推奨します。
 
-詳しい構成は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、カスタマイズ方法は [docs/CUSTOMIZE.md](docs/CUSTOMIZE.md)、セキュリティ方針は [docs/SECURITY.md](docs/SECURITY.md) を参照してください。
+詳しい構成は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、カスタマイズ方法は [docs/CUSTOMIZE.md](docs/CUSTOMIZE.md)、開発・CI・Pull Request・デプロイ運用は [docs/DEVELOPMENT-DEPLOYMENT.md](docs/DEVELOPMENT-DEPLOYMENT.md)、セキュリティ方針は [docs/SECURITY.md](docs/SECURITY.md) を参照してください。
