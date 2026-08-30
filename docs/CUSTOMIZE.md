@@ -1,66 +1,199 @@
-# Customizing the template
+# テンプレートを自分のアプリへカスタマイズする
 
-## 1. Rename the application
+この文書では、このリポジトリをクローンしたあとに、サンプルアプリから自分専用のWebアプリへ変更していく基本的な手順を説明します。
 
-Copy `.env.example` to `.env` and change:
+最初からすべて作り直す必要はありません。**Python・SQLite・Tailscale・セキュリティなどの共通基盤を残し、サンプルの `items` 部分を自分の用途へ置き換える**のが基本です。
+
+## 1. アプリ名を変更する
+
+まず `.env.example` を `.env` へコピーします。
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+macOS / Linux:
+
+```bash
+cp .env.example .env
+```
+
+`.env` をテキストエディターで開き、`APP_NAME` を変更します。
 
 ```text
 APP_NAME=My Private App
 ```
 
-## 2. Replace the sample domain
+たとえば在庫管理なら、次のようにできます。
 
-The sample domain is `items`.
+```text
+APP_NAME=家庭用在庫管理
+```
 
-Replace or extend:
+## 2. サンプルの `items` を自分の機能へ置き換える
 
-- `app/schema.sql`
-- `app/services/items.py`
-- item routes in `app/routes.py`
-- `app/templates/index.html`
-- CRUD tests
+このテンプレートには、動作確認用として簡単な `items` CRUDが入っています。
 
-Keep authentication, CSRF, loopback binding and user isolation unless you have a specific reason to redesign those boundaries.
+主に変更する場所は次のとおりです。
 
-## 3. Evolve the database safely
+| ファイル | 役割 |
+| --- | --- |
+| `app/schema.sql` | SQLiteのテーブル定義 |
+| `app/services/items.py` | データ登録・取得・更新などの処理 |
+| `app/routes.py` | URLやAPI |
+| `app/templates/index.html` | メイン画面 |
+| `tests/` | 自動テスト |
 
-`schema.sql` is suitable for bootstrapping a new database. Once real users have data, stop rewriting existing tables casually. Add an explicit migration mechanism and backup before schema upgrades.
+たとえば「備品管理アプリ」を作るなら、`items` を `equipment` などへ置き換え、備品名・保管場所・数量などの項目を追加していきます。
 
-A lightweight approach is a `schema_migrations` table plus numbered SQL files. A larger project can adopt Alembic/SQLAlchemy if that complexity is justified.
+一方、次の共通基盤は特別な理由がない限り残すことを推奨します。
 
-## 4. Decide your user model
+- Tailscale / localhostによる利用者識別
+- CSRF対策
+- `127.0.0.1` のみでの待ち受け
+- 利用者ごとのデータ分離
+- セキュリティヘッダー
 
-The starter maps a Tailscale login to one row in `users` and a direct localhost owner to one configured identity.
+## 3. SQLiteのテーブルを変更する
 
-Common extensions:
+初めてアプリを作る段階では `app/schema.sql` を変更して構いません。
 
-- `roles` column/table
-- owner/admin flag
-- shared team records
-- per-user preferences
-- audit log
-- Tailscale app capability mapping
+ただし、実際の利用を開始してデータが蓄積された後は注意が必要です。
 
-## 5. Add APIs carefully
+既存テーブルを安易に作り直すと、保存済みデータを失う可能性があります。
 
-For same-origin browser JavaScript, mutating requests must include the CSRF token from:
+運用開始後にDB構造を変更する場合は、次の流れを推奨します。
+
+```text
+バックアップ
+    ↓
+DB変更用SQLを準備
+    ↓
+変更を適用
+    ↓
+動作確認
+```
+
+小規模なアプリなら、`schema_migrations` テーブルと番号付きSQLファイルを用意する方法でも十分です。
+
+アプリが大きくなった場合は、SQLAlchemy / Alembicなどのマイグレーションツールを導入する方法もあります。ただし、小規模アプリでは必要以上に複雑にしないことも重要です。
+
+## 4. 利用者の考え方を決める
+
+初期状態では、Tailscaleのログイン利用者をSQLiteの `users` テーブルへ対応付けます。
+
+アプリを動かしているPCから直接localhostでアクセスした場合は、`.env` に設定したローカルオーナーとして扱います。
+
+アプリの用途に応じて、たとえば次の機能を追加できます。
+
+- 管理者 / 一般利用者などの権限
+- オーナーフラグ
+- 複数利用者で共有するデータ
+- 利用者ごとの設定
+- 操作履歴（監査ログ）
+- Tailscale側の権限との連携
+
+### 大切な考え方
+
+「ログインできる人」と「その人が何を操作できるか」は別です。
+
+たとえば全員がアプリへアクセスできても、管理者だけが削除できるようにしたい場合は、アプリ側にも権限制御を実装します。
+
+## 5. APIを追加する
+
+JavaScriptからPOST / PUT / PATCH / DELETEなどの更新APIを呼び出す場合は、CSRFトークンを送信します。
+
+画面には次のようなトークンが用意されています。
 
 ```html
 <meta name="csrf-token" content="...">
 ```
 
-as:
+更新リクエストでは、これを次のHTTPヘッダーとして送信します。
 
 ```text
 X-CSRF-Token: ...
 ```
 
-Do not enable broad CORS by default.
+テンプレートでは同一アプリ内からの利用を基本としているため、理由なく広範囲なCORS設定を有効にすることは推奨しません。
 
-## 6. Backups
+## 6. データをバックアップする
 
-For SQLite, a practical first step is periodic copies made through SQLite's backup API, not raw file copies during active writes. Put backups outside the source tree and define a retention policy appropriate to the application.
+SQLiteでは、アプリのデータは基本的に次のファイルへ保存されます。
 
-## 7. Tailnet policy
+```text
+data/app.db
+```
 
-Treat Tailscale network access as part of deployment, not application code. Define who may reach the host/service using grants or ACLs in your tailnet policy. Keep application authorization as a second layer when users have different permissions inside the app.
+このファイルは重要です。
+
+ただし、アプリが書き込み中のSQLiteファイルを単純にコピーするより、SQLiteのバックアップAPIを利用してバックアップを作成する方法が安全です。
+
+実運用するアプリでは、次のことを決めておくと安心です。
+
+- バックアップ先
+- バックアップ頻度
+- 何世代残すか
+- 復元方法
+
+バックアップファイルはGitリポジトリの外へ保存してください。
+
+## 7. Tailscaleで誰がアクセスできるかを決める
+
+Tailscaleは、このアプリへ安全に到達するためのネットワークを提供します。
+
+誰がホストPCやサービスへ接続できるかは、必要に応じてTailscaleのGrants / ACLsで制御します。
+
+```text
+Tailscale
+  「このアプリまで到達してよいか」
+        ↓
+Webアプリ
+  「この利用者は何を操作してよいか」
+```
+
+この2段階で考えると分かりやすくなります。
+
+## 8. カスタマイズ後もテストする
+
+変更後はテストを実行してください。
+
+Windows:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+```
+
+macOS / Linux:
+
+```bash
+.venv/bin/python -m pytest
+```
+
+特に複数利用者で使うアプリでは、**利用者Aが利用者Bのデータを見たり変更したりできないこと**をテストすることが重要です。
+
+## 最初のカスタマイズ例
+
+初めてこのテンプレートを利用する場合は、いきなり大きく変更せず、次の順番がおすすめです。
+
+```text
+1. APP_NAMEを変更
+      ↓
+2. サンプルのまま起動確認
+      ↓
+3. schema.sqlに自分の項目を1つ追加
+      ↓
+4. 画面へ表示
+      ↓
+5. 登録・更新処理を変更
+      ↓
+6. テスト追加
+      ↓
+7. 必要ならTailscaleで他端末から確認
+```
+
+一つずつ変更することで、問題が起きたときに原因を特定しやすくなります。
+
+セキュリティ上の注意点については [SECURITY.md](SECURITY.md)、全体構成については [ARCHITECTURE.md](ARCHITECTURE.md) を参照してください。
