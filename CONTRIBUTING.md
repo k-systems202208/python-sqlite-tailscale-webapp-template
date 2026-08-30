@@ -1,9 +1,58 @@
-# Contributing
+# コントリビューションガイド
 
-1. Create a branch from `main`.
-2. Keep infrastructure changes separate from sample-domain changes where practical.
-3. Add or update tests for authentication, authorization and data ownership behavior.
-4. Run `python -m pytest`.
-5. Open a pull request describing the security/deployment impact of the change.
+このテンプレートへの改善提案・バグ修正・機能改善を歓迎します。
 
-Never commit `.env`, `data/`, SQLite database files, generated secrets, or private tailnet information.
+## 基本的な流れ
+
+1. `main` から作業用ブランチを作成します。
+2. 可能な限り、共通基盤の変更とサンプル機能の変更を分けます。
+3. 認証・認可・利用者ごとのデータ分離に影響する変更では、テストを追加または更新します。
+4. `python -m pytest` を実行してテストが成功することを確認します。
+5. Pull Requestを作成し、変更内容とセキュリティ／動作環境への影響を説明します。
+
+## テスト
+
+Windows:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+```
+
+macOS / Linux:
+
+```bash
+.venv/bin/python -m pytest
+```
+
+特に次の動作を壊していないことを確認してください。
+
+- localhostのみで待ち受けること
+- 利用者を正しく識別できること
+- 他の利用者のデータを参照・更新・削除できないこと
+- 更新リクエストのCSRF対策が機能すること
+- セキュリティヘッダーが維持されること
+
+## Gitへ登録してはいけないもの
+
+次のファイルや情報はコミットしないでください。
+
+```text
+.env
+data/
+SQLiteデータベースファイル
+生成された秘密鍵
+個人・組織固有のtailnet情報
+その他の秘密情報
+```
+
+これらは実際の利用環境に固有の情報であり、公開リポジトリへ含めるべきではありません。
+
+## 変更するときの考え方
+
+このプロジェクトは、誰でも自分用のアプリへ流用できる**小さく分かりやすいテンプレート**であることを重視しています。
+
+便利な機能であっても、すべての利用者が必要としない大きな依存ライブラリや複雑な仕組みを共通基盤へ追加する場合は、その必要性を十分に検討してください。
+
+アプリ固有の機能は、できるだけサンプル／カスタマイズ可能な層へ配置することを推奨します。
+
+詳しい構成は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、カスタマイズ方法は [docs/CUSTOMIZE.md](docs/CUSTOMIZE.md)、セキュリティ方針は [docs/SECURITY.md](docs/SECURITY.md) を参照してください。
