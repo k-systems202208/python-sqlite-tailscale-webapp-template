@@ -51,6 +51,23 @@ Tailscaleを有効にすると、同じtailnetに参加しているスマート�
 
 ---
 
+## ドキュメント一覧
+
+READMEを入口として、目的に応じて次のドキュメントへ進んでください。
+
+| ドキュメント | 内容 |
+| --- | --- |
+| [アーキテクチャ](docs/ARCHITECTURE.md) | Python / Flask / SQLite / Tailscaleの役割、全体構成、変更してよい部分と残すべき共通基盤 |
+| [カスタマイズガイド](docs/CUSTOMIZE.md) | サンプルの `items` を自分のアプリへ置き換える手順、DB・API・画面・利用者モデルの変更方法 |
+| [セキュリティ設計](docs/SECURITY.md) | localhost限定、Tailscale利用者識別、CSRF、認証・認可、秘密情報・SQLiteの保護 |
+| [開発・CI・ローカル反映・デプロイ運用](docs/DEVELOPMENT-DEPLOYMENT.md) | GitHub Desktopを使った開発、CI、Pullによるローカル反映、将来の自動デプロイとロールバック方針 |
+| [コントリビューションガイド](CONTRIBUTING.md) | ブランチ、テスト、Pull Request、Gitへ登録してはいけない情報などの開発ルール |
+| [ライセンス](LICENSE) | MIT Licenseの全文 |
+
+初めて使う場合は、**README → カスタマイズガイド → 開発・CI・ローカル反映・デプロイ運用** の順に読むと全体を理解しやすくなります。
+
+---
+
 # 1. 必要なもの
 
 初めて使う場合は、次の3つを準備してください。
@@ -290,6 +307,7 @@ app/static/
 - [カスタマイズガイド](docs/CUSTOMIZE.md)
 - [アーキテクチャ](docs/ARCHITECTURE.md)
 - [セキュリティ](docs/SECURITY.md)
+- [開発・CI・ローカル反映・デプロイ運用](docs/DEVELOPMENT-DEPLOYMENT.md)
 
 ---
 
@@ -316,6 +334,7 @@ python-sqlite-tailscale-webapp-template/
 ├─ docs/
 │  ├─ ARCHITECTURE.md
 │  ├─ CUSTOMIZE.md
+│  ├─ DEVELOPMENT-DEPLOYMENT.md
 │  └─ SECURITY.md
 │
 ├─ scripts/
@@ -326,6 +345,8 @@ python-sqlite-tailscale-webapp-template/
 │
 ├─ tests/                 自動テスト
 ├─ .env.example           設定ファイル見本
+├─ CONTRIBUTING.md        開発参加・変更時のルール
+├─ LICENSE                MIT License
 ├─ requirements.txt       Python依存ライブラリ
 └─ run.py                 起動エントリーポイント
 ```
