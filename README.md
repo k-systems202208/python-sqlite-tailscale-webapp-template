@@ -8,10 +8,12 @@
 
 このテンプレートでは、変更履歴と変更理由を確実に残すため、**mainへの直接Commit / Pushを禁止**します。READMEの誤字修正など、どんなに軽微な変更も例外ではありません。
 
+標準フローは次です。
+
 ```text
 日本語Issueを作成
    ↓
-Issue対応の作業ブランチ
+Issue番号入り作業ブランチ
    ↓
 実装・テスト
    ↓
@@ -21,10 +23,16 @@ Pull Request
    ↓
 CI・差分確認
    ↓
-mainへMerge
+Squash Merge
+   ↓
+Issue Close
+   ↓
+作業ブランチ削除
 ```
 
-mainへ取り込む変更単位ごとにIssueを作成し、**Issueのタイトルと本文は日本語で記載**します。PR本文から `Closes #Issue番号` などでIssueを関連付けます。
+mainへ取り込む変更単位ごとにIssueを作成し、**Issueのタイトルと本文は日本語で記載**します。ブランチ名にはIssue番号を含め、PR本文から `Closes #Issue番号` でIssueを関連付けます。
+
+作業ブランチに複数Commitがあっても、mainへは原則 **Squash Merge** でPR単位の1Commitとして取り込みます。
 
 詳しいルールは [開発・CI・ローカル反映・デプロイ運用](docs/DEVELOPMENT-DEPLOYMENT.md) と [コントリビューションガイド](CONTRIBUTING.md) を参照してください。
 
@@ -62,7 +70,8 @@ flowchart LR
 - CSRF対策・CSPなど基本的なWebセキュリティ対策を実装済み
 - pytestによる自動テスト付き
 - GitHub ActionsによるCI付き
-- Issue / Branch / PRによる変更管理
+- Issue / Branch / PR / Squash Mergeによる変更管理
+- Issueテンプレート / PRテンプレート付き
 - MIT License
 
 ---
@@ -80,7 +89,7 @@ CUSTOMIZE.md
         ↓
 ③ 変更を運ぶ
 DEVELOPMENT-DEPLOYMENT.md
-  日本語Issue → Branch → Commit / Push → PR → CI → mainへMerge → Pull
+  日本語Issue → Issue番号入りBranch → PR → CI → Squash Merge → Pull
 ```
 
 | 今やりたいこと | 読むガイド |
@@ -95,7 +104,7 @@ DEVELOPMENT-DEPLOYMENT.md
 | --- | --- |
 | [アーキテクチャ](docs/ARCHITECTURE.md) | Python / Flask / SQLite / Tailscaleの役割と全体構成 |
 | [セキュリティ設計](docs/SECURITY.md) | localhost、Tailscale利用者識別、CSRF、認証・認可など |
-| [コントリビューションガイド](CONTRIBUTING.md) | Issue / Branch / PR / テスト等の必須ルール |
+| [コントリビューションガイド](CONTRIBUTING.md) | Issue / Branch / PR / Squash Merge / テスト等の必須ルール |
 | [ライセンス](LICENSE) | MIT License |
 
 ---
@@ -171,10 +180,29 @@ tailscale serve status
 
 ---
 
+## GitHubテンプレート
+
+変更管理の抜け漏れを減らすため、次を用意しています。
+
+```text
+.github/ISSUE_TEMPLATE/change-request.md
+.github/pull_request_template.md
+```
+
+Issueは目的・対応内容・影響範囲・完了条件、PRは対応Issue・変更内容・テスト・影響範囲・ドキュメント更新状況を確認できる構成です。
+
+---
+
 ## フォルダー構成
 
 ```text
 python-sqlite-tailscale-webapp-template/
+├─ .github/
+│  ├─ ISSUE_TEMPLATE/
+│  │  └─ change-request.md
+│  ├─ pull_request_template.md
+│  └─ workflows/
+│     └─ ci.yml
 ├─ app/
 │  ├─ auth.py
 │  ├─ config.py
@@ -233,7 +261,24 @@ macOS / Linux:
 .venv/bin/python -m pytest
 ```
 
-GitHubへ作業ブランチをPushするとCIが実行されます。CI成功後、PRの差分を確認してmainへMergeします。
+GitHubへ作業ブランチをPushするとCIが実行されます。CI成功後、PRの差分を確認してSquash Mergeでmainへ取り込みます。
+
+---
+
+## GitHub側のmain保護
+
+ドキュメント上のルールに加えて、GitHubのBranch protection / Rulesetsでもmainを保護することを推奨します。
+
+最低限の推奨設定は次です。
+
+- Pull Request経由の変更を必須にする
+- CI成功を必須にする
+- 未解決Conversationがある場合はMerge不可にする
+- force pushを禁止する
+- mainブランチ削除を禁止する
+- Merge後のhead branch自動削除を有効にする
+
+リポジトリの権限やGitHubプランによって設定画面・利用可能項目が異なる場合があります。具体的な考え方は [開発・CI・ローカル反映・デプロイ運用](docs/DEVELOPMENT-DEPLOYMENT.md) を参照してください。
 
 ---
 
@@ -241,19 +286,23 @@ GitHubへ作業ブランチをPushするとCIが実行されます。CI成功後
 
 ### 小さなREADME修正だけならmainへ直接Commitしてよいですか？
 
-**いいえ。禁止です。** 日本語Issueを作成し、作業ブランチで修正してPRからmainへMergeします。
+**いいえ。禁止です。** 日本語Issueを作成し、Issue番号入り作業ブランチで修正してPRからmainへSquash Mergeします。
 
 ### Issueは不具合のときだけ必要ですか？
 
 いいえ。新機能、修正、リファクタリング、テスト、ドキュメント、誤字修正を含め、mainへ取り込むすべての変更単位でIssueを作成します。
 
-### Issueは英語でもよいですか？
+### ブランチ名は自由ですか？
 
-このテンプレートの運用では、Issueタイトルと本文は日本語で記載します。
+用途を表すプレフィックスとIssue番号を含めます。例：`feat/12-inventory-search`、`fix/18-user-isolation`、`docs/23-update-readme`。
+
+### なぜSquash Mergeを使うのですか？
+
+作業中の細かなCommitをPR単位の1Commitへまとめ、mainの履歴をIssue / PR単位で読みやすくするためです。
 
 ### ChatGPT / CodexがGitHubを変更する場合も同じですか？
 
-はい。同じです。AIから変更する場合も、先に日本語Issueを作成し、Issue対応ブランチへ変更し、PR・CIを経由してmainへMergeします。
+はい。同じです。AIから変更する場合も、先に日本語Issueを作成し、Issue番号入り作業ブランチへ変更し、PR・CI・Squash Mergeを経由します。
 
 ### GitHubの変更はローカルPCへ自動反映されますか？
 
