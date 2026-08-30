@@ -72,6 +72,7 @@ flowchart LR
 - GitHub ActionsによるCI付き
 - Issue / Branch / PR / Squash Mergeによる変更管理
 - Issueテンプレート / PRテンプレート付き
+- GitHub Ruleset / Merge設定の自動セットアップ付き
 - MIT License
 
 ---
@@ -81,7 +82,7 @@ flowchart LR
 ```text
 ① 作り始める
 GETTING-STARTED.md
-  自分用リポジトリ作成 → Clone → 初回起動 → AIへ最初の依頼
+  自分用リポジトリ作成 → Clone → GitHub初期設定 → 初回起動 → AIへ最初の依頼
         ↓
 ② 作る
 CUSTOMIZE.md
@@ -95,6 +96,7 @@ DEVELOPMENT-DEPLOYMENT.md
 | 今やりたいこと | 読むガイド |
 | --- | --- |
 | 新しいアプリを作り始めたい | **[① 新規開発スタートガイド](docs/GETTING-STARTED.md)** |
+| GitHubのmain保護・PR・Squash設定を簡単に適用したい | **[GitHub初期設定ガイド](docs/GITHUB-SETUP.md)** |
 | サンプル `items` を自分の機能へ作り替えたい | **[② カスタマイズガイド](docs/CUSTOMIZE.md)** |
 | Issue / PR / CI / Pull / Releaseを知りたい | **[③ 開発・CI・ローカル反映・デプロイ運用](docs/DEVELOPMENT-DEPLOYMENT.md)** |
 
@@ -102,6 +104,7 @@ DEVELOPMENT-DEPLOYMENT.md
 
 | ドキュメント | 内容 |
 | --- | --- |
+| [GitHub初期設定](docs/GITHUB-SETUP.md) | Ruleset、Squash Merge、Branch自動削除の自動・手動設定 |
 | [アーキテクチャ](docs/ARCHITECTURE.md) | Python / Flask / SQLite / Tailscaleの役割と全体構成 |
 | [セキュリティ設計](docs/SECURITY.md) | localhost、Tailscale利用者識別、CSRF、認証・認可など |
 | [コントリビューションガイド](CONTRIBUTING.md) | Issue / Branch / PR / Squash Merge / テスト等の必須ルール |
@@ -114,6 +117,7 @@ DEVELOPMENT-DEPLOYMENT.md
 - Git
 - Python 3.11以上
 - 開発・稼働用PC
+- GitHub CLI（GitHub初期設定を自動化する場合）
 - 外部端末から利用する場合はTailscale
 
 ---
@@ -126,6 +130,16 @@ cd python-sqlite-tailscale-webapp-template
 ```
 
 新しいアプリを開発する場合は、元テンプレートを直接編集せず、自分用リポジトリを作成してください。詳しくは [新規開発スタートガイド](docs/GETTING-STARTED.md) を参照してください。
+
+### GitHub推奨設定を自動適用する（Windows）
+
+自分用リポジトリをCloneしたあと、GitHub CLIで認証済みなら次を実行できます。
+
+```powershell
+.\scripts\setup-github.ps1
+```
+
+これにより、`Protect main` Ruleset、PR必須、CI必須、Squash Mergeのみ、Merge後の作業ブランチ自動削除などをまとめて設定します。詳しくは [GitHub初期設定ガイド](docs/GITHUB-SETUP.md) を参照してください。
 
 ### Windows
 
@@ -180,16 +194,20 @@ tailscale serve status
 
 ---
 
-## GitHubテンプレート
+## GitHubテンプレートと設定ファイル
 
-変更管理の抜け漏れを減らすため、次を用意しています。
+変更管理とGitHub設定の抜け漏れを減らすため、次を用意しています。
 
 ```text
 .github/ISSUE_TEMPLATE/change-request.md
 .github/pull_request_template.md
+github/protect-main.ruleset.json
+scripts/setup-github.ps1
 ```
 
 Issueは目的・対応内容・影響範囲・完了条件、PRは対応Issue・変更内容・テスト・影響範囲・ドキュメント更新状況を確認できる構成です。
+
+`protect-main.ruleset.json` はGitHub Rulesetの再利用可能な定義で、`setup-github.ps1` はそのRulesetとリポジトリのMerge設定を適用します。
 
 ---
 
@@ -216,11 +234,16 @@ python-sqlite-tailscale-webapp-template/
 │  └─ static/
 ├─ docs/
 │  ├─ GETTING-STARTED.md
+│  ├─ GITHUB-SETUP.md
 │  ├─ CUSTOMIZE.md
 │  ├─ DEVELOPMENT-DEPLOYMENT.md
 │  ├─ ARCHITECTURE.md
 │  └─ SECURITY.md
+├─ github/
+│  └─ protect-main.ruleset.json
 ├─ scripts/
+│  ├─ setup-github.ps1
+│  └─ ...
 ├─ tests/
 ├─ .env.example
 ├─ CONTRIBUTING.md
@@ -267,18 +290,27 @@ GitHubへ作業ブランチをPushするとCIが実行されます。CI成功後
 
 ## GitHub側のmain保護
 
-ドキュメント上のルールに加えて、GitHubのBranch protection / Rulesetsでもmainを保護することを推奨します。
+ドキュメント上のルールに加えて、GitHubのRulesetsでmainを保護します。
 
-最低限の推奨設定は次です。
+Windowsでは、対象リポジトリで次を実行する方法を推奨します。
+
+```powershell
+.\scripts\setup-github.ps1
+```
+
+自動設定される主な内容：
 
 - Pull Request経由の変更を必須にする
-- CI成功を必須にする
+- CI `test (3.11)` / `test (3.12)` / `test (3.13)` の成功を必須にする
 - 未解決Conversationがある場合はMerge不可にする
+- Squash Mergeのみ許可する
+- linear historyを必須にする
 - force pushを禁止する
-- mainブランチ削除を禁止する
+- Default branch削除を禁止する
 - Merge後のhead branch自動削除を有効にする
+- Bypassを設定しない
 
-リポジトリの権限やGitHubプランによって設定画面・利用可能項目が異なる場合があります。具体的な考え方は [開発・CI・ローカル反映・デプロイ運用](docs/DEVELOPMENT-DEPLOYMENT.md) を参照してください。
+GitHub CLIを使わない場合は `github/protect-main.ruleset.json` をRulesets画面からImportできます。詳細は [GitHub初期設定ガイド](docs/GITHUB-SETUP.md) を参照してください。
 
 ---
 
@@ -299,6 +331,10 @@ GitHubへ作業ブランチをPushするとCIが実行されます。CI成功後
 ### なぜSquash Mergeを使うのですか？
 
 作業中の細かなCommitをPR単位の1Commitへまとめ、mainの履歴をIssue / PR単位で読みやすくするためです。
+
+### GitHubの設定を毎回手作業で行う必要がありますか？
+
+Windowsでは `scripts/setup-github.ps1` を用意しています。GitHub CLIで認証した状態で実行すると、Rulesetと主要なPull Request設定をまとめて適用できます。
 
 ### ChatGPT / CodexがGitHubを変更する場合も同じですか？
 
