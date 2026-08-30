@@ -1,0 +1,50 @@
+import json
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_protect_main_ruleset_matches_template_policy():
+    ruleset_path = ROOT / "github" / "protect-main.ruleset.json"
+    ruleset = json.loads(ruleset_path.read_text(encoding="utf-8"))
+
+    assert ruleset["name"] == "Protect main"
+    assert ruleset["target"] == "branch"
+    assert ruleset["enforcement"] == "active"
+    assert ruleset["bypass_actors"] == []
+    assert ruleset["conditions"]["ref_name"]["include"] == ["~DEFAULT_BRANCH"]
+
+    rules = {rule["type"]: rule for rule in ruleset["rules"]}
+    assert {"deletion", "non_fast_forward", "required_linear_history"} <= set(rules)
+
+    pull_request = rules["pull_request"]["parameters"]
+    assert pull_request["required_approving_review_count"] == 0
+    assert pull_request["required_review_thread_resolution"] is True
+    assert pull_request["allowed_merge_methods"] == ["squash"]
+
+    checks = rules["required_status_checks"]["parameters"]
+    assert checks["strict_required_status_checks_policy"] is False
+    assert checks["do_not_enforce_on_create"] is False
+    assert {check["context"] for check in checks["required_status_checks"]} == {
+        "test (3.11)",
+        "test (3.12)",
+        "test (3.13)",
+    }
+
+
+def test_setup_script_applies_repository_policy():
+    script = (ROOT / "scripts" / "setup-github.ps1").read_text(encoding="utf-8")
+
+    required_fragments = [
+        "allow_squash_merge=true",
+        "allow_merge_commit=false",
+        "allow_rebase_merge=false",
+        "delete_branch_on_merge=true",
+        "allow_update_branch=true",
+        "protect-main.ruleset.json",
+        "repos/$Repository/rulesets",
+    ]
+
+    for fragment in required_fragments:
+        assert fragment in script
