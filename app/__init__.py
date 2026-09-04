@@ -5,9 +5,10 @@ from flask import Flask, g, request
 
 from .auth import resolve_identity
 from .config import load_settings
+from .core.routes import bp as core_bp
 from .csrf import install_csrf
 from .db import close_db, ensure_user, init_db
-from .routes import bp
+from .features import register_features
 from .security import install_security_headers
 
 HEALTH_PATHS = {"/healthz", "/readyz"}
@@ -58,6 +59,7 @@ def create_app(test_config=None):
 
     install_csrf(app)
     install_security_headers(app)
-    app.register_blueprint(bp)
+    app.register_blueprint(core_bp)
+    register_features(app)
 
     return app
