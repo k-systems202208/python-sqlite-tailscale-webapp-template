@@ -1,217 +1,205 @@
-# セキュリティ設計
+# Security
 
-このテンプレートは、インターネットへ一般公開するWebサービスではなく、**自宅・社内・小規模チームなどで利用するクローズドなWebアプリ**を想定しています。
+このテンプレートはインターネット一般公開ではなく、自宅・社内・小規模チーム向けのクローズドWebアプリを想定しています。
 
-ただし「Tailscaleを使っているから何をしても安全」というわけではありません。ネットワーク、アプリ、OSのそれぞれで適切な対策を行うことが重要です。
+ただし、Tailscaleだけを唯一の防御にしません。ネットワーク、アプリ、保存データの複数層で守ります。
 
-## 基本的な境界
+## セキュリティ境界
 
-Pythonのバックエンドは `127.0.0.1` のみで待ち受けます。
-
-```text
-外部端末
-   |
-   | Tailscale
-   v
-Tailscale Serve
-   |
-   | localhost
-   v
-127.0.0.1:8000
-   |
-   v
-Python / Flask
+```mermaid
+flowchart LR
+    U["User / Device"] --> T["Tailscale / tailnet"]
+    T --> S["Tailscale Serve"]
+    S --> L["127.0.0.1 only"]
+    L --> F["Flask\nAuth / Authorization / CSRF"]
+    F --> D[("SQLite / OS")]
 ```
 
-他の端末からアクセスする場合はTailscale Serveを経由します。
+## 1. localhost限定
 
-この構成が重要なのは、Tailscaleから渡される利用者情報を、信頼できるローカル経路から受け取るためです。
+Flask / Waitressは `127.0.0.1` のみにbindします。
 
-`run.py` は意図せず外部公開されることを防ぐため、localhost以外へのbindを拒否する設計になっています。
+```text
+127.0.0.1:8000  推奨
+0.0.0.0:8000    使用しない
+```
 
-## Tailscaleの利用者情報
+外部端末からの入口はTailscale Serveにします。`run.py` は意図しない外部bindを防ぐ設計です。
 
-Tailscale Serveは、認証されたtailnet利用者からのアクセスをバックエンドへ転送するとき、次のような利用者情報ヘッダーを追加できます。
+## 2. Tailscale利用者ヘッダーの信頼条件
+
+Tailscale Serveは次の利用者情報をバックエンドへ渡せます。
 
 ```text
 Tailscale-User-Login
 Tailscale-User-Name
 ```
 
-テンプレートでは、バックエンドへの接続元がloopback（localhost）の場合だけ、これらのヘッダーを利用者情報として受け入れます。
+`app/auth.py` は `request.remote_addr` がloopbackの場合だけこれらを信用します。
 
-これにより、別の端末から同じ名前のHTTPヘッダーを勝手に付けてTailscale利用者になりすますことを防ぎます。
+```mermaid
+flowchart TD
+    H["User headers"] --> L{"Request from loopback?"}
+    L -->|"Yes"| T["Tailscale identityとして利用"]
+    L -->|"No"| N["信用しない"]
+```
 
-Tailscaleの利用者情報ヘッダーを使う場合、バックエンドをlocalhostだけで待ち受ける構成は重要です。
+これにより、外部クライアントが同名ヘッダーを勝手に付けてなりすますことを防ぎます。
 
-## ホストPC自体もセキュリティ境界の一部
+## 3. 認証と認可を分ける
 
-このアプリを動かしているPC上で、十分な権限を持つ別プロセスが動いている場合、そのプロセスはlocalhostへアクセスできる可能性があります。
+```mermaid
+flowchart LR
+    A["Authentication\n誰か"] --> Z["Authorization\n何をしてよいか"]
+    Z --> D["Allowed data / action"]
+```
 
-つまり、TailscaleやWebアプリだけでなく、**ホストPC自体も信頼する必要があります。**
+Tailscaleで利用者を識別できても、アプリ内のすべてのデータを操作してよいとは限りません。
 
-基本的には次の点を守ってください。
+サンプル `items` はSQLで `owner_user_id` を条件に含め、本人のデータだけを操作します。
 
-- OSを更新する
-- 不審なソフトウェアを実行しない
-- PCのログインを適切に保護する
-- SQLiteファイルや `.env` のアクセス権を適切に管理する
+```sql
+WHERE id = ? AND owner_user_id = ?
+```
 
-## ブラウザからの攻撃への対策
+画面上でボタンを隠すだけでは認可になりません。Service / SQL側でも必ず判定します。
 
-テンプレートでは、初期状態で次の対策を行っています。
+詳細は [AUTH-CRUD.md](AUTH-CRUD.md) を参照してください。
 
-- POST / PUT / PATCH / DELETEへのCSRF対策
-- セッションCookieの `HttpOnly`
-- セッションCookieの `SameSite=Strict`
-- Content Security Policy（CSP）
+## 4. CSRF
+
+POST / PUT / PATCH / DELETEなど状態変更リクエストはCSRF対策の対象です。
+
+```mermaid
+flowchart LR
+    B["Browser"] --> T["CSRF token"]
+    T --> V{"Validate"}
+    V -->|"OK"| P["Update"]
+    V -->|"NG"| X["Reject"]
+```
+
+独自Route / APIを追加するときも既存のCSRF保護を外さないでください。
+
+## 5. セキュリティヘッダー
+
+初期状態ではCSP等のセキュリティヘッダーを設定します。用途上必要な変更を行う場合も、単に無効化するのではなく必要最小限の許可へ調整します。
+
+主な方針:
+
+- Content Security Policy
 - iframe等への埋め込み防止
 - MIME sniffing防止
 - Referrer情報の抑制
-- HTML / JSONレスポンスの `no-store`
-- JinjaによるHTMLエスケープ
+- HTML / JSONの `no-store`
+- セッションCookie `HttpOnly`
+- セッションCookie `SameSite=Strict`
+- JinjaのHTMLエスケープ
 - 不要なCORSを有効化しない
 
-自分のアプリへカスタマイズするときも、特別な理由がなければこれらを削除しないことを推奨します。
+## 6. 秘密情報
 
-## ネットワーク公開について
-
-### 推奨する構成
+GitHubへ登録しないもの:
 
 ```text
-Python / Flask
-    127.0.0.1
-        ↓
-Tailscale Serve
-        ↓
-許可された端末
-```
-
-推奨事項:
-
-- アプリは `127.0.0.1` のまま利用する
-- 外部端末からはTailscale Serveを利用する
-- 必要に応じてTailscaleのGrants / ACLsでアクセスを制限する
-- SQLiteファイルをOSのアクセス権とバックアップで保護する
-
-### 避ける構成
-
-このテンプレートをクローズドなアプリとして利用する場合、次の設定は基本的に避けてください。
-
-- `0.0.0.0` での待ち受け
-- ルーターのポート開放
-- DMZへの公開
-- プライベート用途でのTailscale Funnel
-- `app.db` のGitHubへの登録
-- `.env` のGitHubへの登録
-- `data/` のGitHubへの登録
-
-特に `.env` やSQLiteには、アプリ固有の設定や利用者データが含まれる可能性があります。
-
-## 認証と認可の違い
-
-セキュリティを考えるうえで重要なのが、**認証（Authentication）と認可（Authorization）は別物**という点です。
-
-```text
-認証
-「この人は誰か？」
-       ↓
-認可
-「この人は何をしてよいか？」
-```
-
-Tailscaleで利用者を確認できても、その利用者がアプリ内のすべてのデータを操作してよいとは限りません。
-
-サンプルアプリでは、SQLで `owner_user_id` を条件に含めることで、自分のデータだけを操作できるようにしています。
-
-この考え方は、自分のテーブルを追加するときも維持してください。
-
-### 悪い例
-
-画面上で削除ボタンを非表示にするだけ。
-
-利用者がAPIを直接呼べば削除できてしまう可能性があります。
-
-### 良い例
-
-画面だけでなく、Pythonの処理やSQLでも「この利用者に操作権限があるか」を確認します。
-
-## 管理者などの権限を追加する場合
-
-アプリによっては、次のような権限が必要になることがあります。
-
-```text
-管理者
-  ├─ 全データ参照
-  ├─ 登録
-  ├─ 更新
-  └─ 削除
-
-一般利用者
-  ├─ 自分のデータ参照
-  ├─ 登録
-  └─ 自分のデータ更新
-```
-
-その場合は、SQLiteへロールや権限情報を追加してアプリ側で判定できます。
-
-より高度な構成ではTailscale Grants / app capabilitiesとの連携も考えられますが、小規模アプリではまずアプリ側のシンプルなロール管理から始める方法で十分です。
-
-## 秘密情報の管理
-
-Flaskのセッションには秘密鍵が必要です。
-
-`APP_SECRET_KEY` が設定されていない場合、このテンプレートはランダムな秘密鍵を生成して次へ保存します。
-
-```text
-data/.secret_key
-```
-
-`data/` は `.gitignore` に含まれているため、通常はGitHubへアップロードされません。
-
-より本格的な運用では、環境変数として `APP_SECRET_KEY` を設定することもできます。
-
-秘密鍵をREADME、ソースコード、Issueなどへ直接記載しないでください。
-
-## SQLiteデータの保護
-
-SQLiteのデータは次に保存されます。
-
-```text
+.env
+data/
 data/app.db
+data/.secret_key
+個人・組織固有の秘密情報
 ```
 
-このファイルが失われると、アプリのデータも失われる可能性があります。
+`APP_SECRET_KEY` が未設定の場合、テンプレートは秘密鍵を `data/.secret_key` へ生成します。`data/` はGit管理対象外です。
 
-セキュリティには「他人に見せない」だけでなく、**データを失わないこと**も含まれます。
+本格運用で環境変数へ秘密鍵を設定する場合も、値を `.env.example`、README、Issue、PRへ記載しません。
 
-実運用では定期的なバックアップを推奨します。
+## 7. SQLiteデータの保護
 
-## カスタマイズ時のチェックポイント
-
-新しい機能を追加したら、最低限次を確認してください。
-
-- 他の利用者のデータをURLやAPIから直接参照できないか
-- 他の利用者のIDを指定して更新・削除できないか
-- 更新APIにCSRF対策があるか
-- 入力した文字列がそのままHTMLとして実行されないか
-- `.env` や `data/` がGit管理対象になっていないか
-- アプリが `127.0.0.1` 以外で待ち受けていないか
-- Tailscaleで必要以上の利用者へ公開していないか
-
-## 最後に
-
-このテンプレートの基本方針は、次の3段階で守ることです。
-
-```text
-Tailscale
-「アプリまで到達できる人を制限」
-        ↓
-Python / Flask
-「利用者ができる操作を制限」
-        ↓
-SQLite / OS
-「保存データを保護」
+```mermaid
+flowchart LR
+    A["Application"] --> DB[("data/app.db")]
+    DB --> O["OS permissions"]
+    DB --> B["Backup"]
 ```
 
-どれか一つだけに依存するのではなく、それぞれを組み合わせることで、シンプルながら安全性を考慮したクローズドWebアプリを構築できます。
+セキュリティには機密性だけでなく、データを失わないことも含まれます。
+
+- DBファイルのOSアクセス権を適切に管理
+- 定期バックアップ
+- Schema変更前バックアップ
+- 復元テスト
+
+詳細は [SQLITE-SETUP.md](SQLITE-SETUP.md) を参照してください。
+
+## 8. ホストPCも信頼境界
+
+ホストPC上の十分な権限を持つプロセスはlocalhostへアクセスできる可能性があります。
+
+したがって次も必要です。
+
+- OS更新
+- PCログイン保護
+- 不審なソフトウェアを実行しない
+- `.env` / SQLite /秘密鍵のアクセス権管理
+- 不要な共有フォルダーへデータを置かない
+
+## 9. Tailscaleのアクセス範囲
+
+必要に応じてTailscale Grants / ACLsでアプリへ到達できる利用者・端末を絞ります。
+
+```mermaid
+flowchart LR
+    T["Tailnet"] --> G{"Grants / ACLs"}
+    G -->|"Allow"| A["Application"]
+    G -->|"Deny"| X["Blocked"]
+```
+
+ネットワーク到達制御とアプリ内認可は両方維持します。
+
+## 10. 避ける構成
+
+- `0.0.0.0` へのbind
+- ルーターのポート開放
+- DMZへの配置
+- クローズド用途でのTailscale Funnel
+- Tailscale利用者ヘッダーを外部接続から信用
+- `.env` / `data/` のGitHub登録
+- SQLiteファイルをネットワーク共有し複数サーバーから同時利用
+- 認可を画面表示だけで実装
+- CSRF / CSPを理由なく無効化
+
+## 11. 管理者・共有データを追加する場合
+
+単純な `owner_user_id` だけでは表現できない場合、Roleや共有関係を明示的に設計します。
+
+```mermaid
+flowchart TD
+    U["User"] --> R{"Role / Membership"}
+    R -->|"Owner"| O["Own data"]
+    R -->|"Admin"| A["Administrative scope"]
+    R -->|"Member"| S["Shared data"]
+```
+
+Tailscale所属だけを管理者判定の代わりにしません。
+
+## 12. カスタマイズ時のチェック
+
+- 他利用者のIDを指定して参照・更新・削除できない
+- 未認証アクセスを拒否する
+- 更新APIにCSRFがある
+- 入力文字列が意図せずHTML / scriptとして実行されない
+- `.env` / `data/` がGit管理対象外
+- Flaskが `127.0.0.1` のみ
+- Tailscale Serve経由の利用者が正しい
+- Tailscale側で公開範囲が広すぎない
+- DBバックアップがある
+- セキュリティ変更をpytestで確認した
+
+## 13. 防御の考え方
+
+```mermaid
+flowchart LR
+    N["Network\nTailscale"] --> A["Application\nAuth / Authorization / CSRF"]
+    A --> D["Data\nSQLite / OS / Backup"]
+```
+
+どれか1層だけに依存せず、複数層を組み合わせることがこのテンプレートの基本方針です。
