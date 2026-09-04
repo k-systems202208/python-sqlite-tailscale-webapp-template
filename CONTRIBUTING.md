@@ -1,6 +1,6 @@
 # コントリビューションガイド
 
-このテンプレートへの改善提案・バグ修正・機能改善を歓迎します。
+このテンプレートへの改善提案・バグ修正・共通基盤の改善を歓迎します。
 
 ## 必須ルール
 
@@ -21,35 +21,29 @@
 
 READMEの誤字、コメント、軽微な文言変更、ドキュメントだけの変更も例外ではありません。
 
-```text
-日本語Issue
-   ↓
-Issue番号入りBranch
-   ↓
-実装・テスト
-   ↓
-Commit / Push
-   ↓
-Pull Request
-   ↓
-CI・差分確認
-   ↓
-Squash Merge
-   ↓
-Issue Close
-   ↓
-Branch削除
+```mermaid
+flowchart LR
+    I["日本語Issue"] --> B["Issue番号入りBranch"]
+    B --> W["実装 / docs / test"]
+    W --> C["Commit / Push"]
+    C --> P["Pull Request"]
+    P --> CI["GitHub Actions CI"]
+    CI --> M["Squash Merge"]
+    M --> X["Issue Close / Branch delete"]
 ```
 
 ## Issue
 
-Issueは変更理由と完了条件を残す作業票です。GitHubで新規Issueを作成するときは `.github/ISSUE_TEMPLATE/change-request.md` を使用します。
+Issueは変更理由と完了条件を残す作業票です。原則として **1 Issue = 1 PR** とします。
 
-原則として **1 Issue = 1 PR** とします。大きな変更は複数Issueへ分割し、1つのPRへ無関係な変更をまとめません。
+本文では最低限、次を明確にします。
+
+- 目的
+- 対応内容
+- 影響範囲
+- 完了条件
 
 ## ブランチ命名規則
-
-ブランチ名にはIssue番号を必ず含めます。
 
 ```text
 feat/12-inventory-search
@@ -57,50 +51,31 @@ fix/18-user-isolation
 docs/23-update-readme
 refactor/31-item-service
 test/42-add-auth-tests
+chore/70-update-dependencies
 ```
-
-推奨プレフィックス：
-
-- `feat/`：機能追加
-- `fix/`：不具合修正
-- `docs/`：ドキュメント
-- `refactor/`：内部整理
-- `test/`：テスト
-- `chore/`：設定・依存関係・保守
 
 ## Pull Request
 
-PR作成時は `.github/pull_request_template.md` が表示されます。対応Issue、変更内容、テスト、影響範囲、DB・設定・セキュリティ影響、ドキュメント更新状況を記載してください。
-
-PR本文では原則次を使います。
+PR作成時は `.github/pull_request_template.md` を利用し、対応Issue、変更内容、テスト、影響範囲、DB・設定・セキュリティ影響、ドキュメント更新状況を記載します。
 
 ```text
 Closes #123
 ```
 
-これにより、PRがmainへMergeされたとき対応Issueを自動Closeできます。
+## Squash Merge
 
-## Merge方式
+作業ブランチに複数Commitがあっても、mainへはPR単位の1Commitとして取り込みます。
 
-**原則Squash Mergeを使用します。**
-
-作業ブランチ内で複数Commitがあっても、mainにはPR単位の1Commitとして取り込みます。これによりmainの履歴をIssue / PR単位で読みやすく保ちます。
-
-例：
-
-```text
-PR #24 在庫一覧に検索機能を追加
-  ├─ feat: 検索API追加
-  ├─ test: テスト追加
-  └─ docs: README更新
-
-        ↓ Squash Merge
-
-main
-  └─ 在庫一覧に検索機能を追加 (#24)
+```mermaid
+flowchart TD
+    B["Working branch"] --> C1["feat commit"]
+    B --> C2["test commit"]
+    B --> C3["docs commit"]
+    C1 --> S["Squash Merge"]
+    C2 --> S
+    C3 --> S
+    S --> M["main: 1 PR = 1 commit"]
 ```
-
-特殊な理由がない限りMerge Commit / Rebase Mergeは使用しません。
 
 ## Merge前チェック
 
@@ -109,46 +84,16 @@ main
 - PRとIssueが関連付いている
 - mainへの直接Commitではない
 - 意図しないファイル変更がない
-- `.env` や実データが含まれていない
+- `.env` / `data/` / SQLite実データ / 秘密情報が含まれていない
 - 必要なテストが追加・更新されている
 - CIが成功している
 - 認証・認可を弱めていない
 - 他利用者のデータへアクセスできる変更になっていない
 - `0.0.0.0` へのbind変更がない
-- CSRFやセキュリティヘッダーを壊していない
+- CSRF / セキュリティヘッダーを壊していない
 - DB変更時は既存データへの影響を確認した
-- READMEや関連docsが最新になっている
+- README / docsが最新になっている
 - Squash Mergeを選択している
-
-## Merge後
-
-Merge後は次を行います。
-
-```text
-Issue Close（Closesで通常は自動）
-   ↓
-作業ブランチ削除
-   ↓
-ローカルmainへ切り替え
-   ↓
-Fetch / Pull
-```
-
-GitHubリポジトリ設定で **Automatically delete head branches** を有効にすることを推奨します。
-
-## GitHub側で推奨するmain保護
-
-ドキュメント上のルールだけでなく、GitHub側でもmainを保護することを推奨します。
-
-最低限、次を設定します。
-
-- Pull Request経由の変更を必須にする
-- required status checksでCI成功を必須にする
-- conversation resolutionを必須にする
-- force pushを禁止する
-- branch deletionを禁止する
-
-リポジトリの権限やプランによって表示される設定項目が異なる場合があります。詳細は [docs/DEVELOPMENT-DEPLOYMENT.md](docs/DEVELOPMENT-DEPLOYMENT.md) を参照してください。
 
 ## テスト
 
@@ -164,7 +109,16 @@ macOS / Linux:
 .venv/bin/python -m pytest
 ```
 
-特にlocalhost制約、利用者識別、利用者間データ分離、CSRF、セキュリティヘッダーを壊していないことを確認します。
+共通基盤を変更した場合は、localhost制約、利用者識別、利用者間データ分離、CSRF、セキュリティヘッダーも確認します。
+
+## CI成功報告
+
+CI成功をもって作業完了と報告する場合、最低限次を併記します。
+
+- 修正ソース一覧
+- 修正ドキュメント一覧
+- 修正または追加したテスト一覧
+- CI結果
 
 ## Gitへ登録してはいけないもの
 
@@ -177,10 +131,26 @@ SQLiteデータベースファイル
 その他の秘密情報
 ```
 
-## 変更するときの考え方
+## テンプレート本体へ追加するもの
 
-このプロジェクトは、誰でも自分用のアプリへ流用できる**小さく分かりやすいテンプレート**であることを重視しています。
+このリポジトリは、誰でも自分用アプリへ流用できる小さな共通テンプレートであることを重視します。
 
-便利な機能であっても、すべての利用者が必要としない大きな依存ライブラリや複雑な仕組みを共通基盤へ追加する場合は、その必要性を十分に検討してください。
+テンプレート本体へ追加するのは、複数のローカルWebアプリで再利用価値があるものを基本とします。
 
-詳しい構成は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、カスタマイズ方法は [docs/CUSTOMIZE.md](docs/CUSTOMIZE.md)、Issue・Pull Request・CI・デプロイ運用は [docs/DEVELOPMENT-DEPLOYMENT.md](docs/DEVELOPMENT-DEPLOYMENT.md)、セキュリティ方針は [docs/SECURITY.md](docs/SECURITY.md) を参照してください。
+- 共通の安全策
+- 開発・CI改善
+- セットアップ改善
+- 汎用的なサンプル
+- ドキュメント改善
+
+特定会社・特定業務だけで必要な機能は、このテンプレートから作成した各アプリ側で実装します。
+
+## 関連ドキュメント
+
+- [GETTING-STARTED.md](GETTING-STARTED.md) - 初めて利用する手順
+- [docs/CUSTOMIZING.md](docs/CUSTOMIZING.md) - 独自アプリへの置き換え
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) - Issue / Branch / PR / CI
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - 稼働PCへの反映
+- [docs/GITHUB-SETUP.md](docs/GITHUB-SETUP.md) - main保護・Ruleset
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - 構成
+- [docs/SECURITY.md](docs/SECURITY.md) - セキュリティ
