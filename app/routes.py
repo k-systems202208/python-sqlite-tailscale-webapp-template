@@ -1,7 +1,17 @@
 import sqlite3
 from functools import wraps
 
-from flask import Blueprint, abort, current_app, g, jsonify, redirect, render_template, request, url_for
+from flask import (
+    Blueprint,
+    abort,
+    current_app,
+    g,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from werkzeug.exceptions import HTTPException
 
 from .db import get_db
