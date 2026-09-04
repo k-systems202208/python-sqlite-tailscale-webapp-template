@@ -1,11 +1,11 @@
 from pathlib import Path
 
+from conftest import tailscale_headers
 from flask import Flask
 
 import app.db as db_module
 import app.features as features
 from app import create_app
-from conftest import tailscale_headers
 
 
 def test_feature_registration_is_safe_when_no_feature_package_exists(monkeypatch):
