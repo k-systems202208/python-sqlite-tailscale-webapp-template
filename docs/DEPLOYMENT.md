@@ -1,50 +1,59 @@
 # Deployment to Local Host PC
 
-このテンプレートの本番環境は、Vercel等のクラウドではなく、Python / Flask / SQLiteを動かす**稼働PC**です。別端末からのアクセスにはTailscale Serveを使います。
+このテンプレートの本番環境は、Python / Flask / SQLiteを動かす**稼働PC**です。別端末からのアクセスにはTailscale Serveを使います。
 
 ## 全体構成
 
 ```mermaid
 flowchart LR
     G["GitHub main"] --> H["Host PC"]
-    H --> P["Python / Flask / Waitress"]
+    H --> P["Flask / Waitress"]
     P --> D[("SQLite data/app.db")]
     T["Tailscale Serve"] --> P
     U["PC / Smartphone"] -->|"HTTPS"| T
 ```
 
-## 1. GitHubと稼働PCを分けて考える
+## 1. 開発PCと稼働PCを分ける
 
-GitHubへMergeしても、稼働PCのソースは自動更新されません。
+GitHubへMergeしても稼働PCへ自動反映されません。
 
 ```mermaid
 flowchart LR
     M["main merge"] --> G["GitHub"]
-    G -->|"git pull"| H["Host PC source"]
-    H --> R["Restart app"]
+    G -->|"git pull"| H["Host PC"]
+    H --> MG["Migration"]
+    MG --> R["Restart"]
+    R --> V["health / ready check"]
 ```
 
-`.env` と `data/app.db` は稼働PC側のローカルデータで、通常GitHubから配布しません。
+`.env`、`data/app.db`、`backups/` は稼働PC側のローカルデータです。
 
-## 2. 初回セットアップ
+## 2. 初回の稼働PCセットアップ
 
-稼働PCへ自分用リポジトリをCloneし、依存関係を準備します。
+稼働PCにはRuff / pytest等の開発ツールを必須にしません。runtime用bootstrapを使います。
 
 Windows:
 
 ```powershell
-.\scripts\bootstrap.ps1
+.\scripts\bootstrap-runtime.ps1
 Copy-Item .env.example .env
 ```
 
 macOS / Linux:
 
 ```bash
-./scripts/bootstrap.sh
+./scripts/bootstrap-runtime.sh
 cp .env.example .env
 ```
 
-`.env` を本番用途に合わせて設定します。
+`.env` を本番用に設定します。
+
+```env
+APP_NAME=My Local App
+LOG_LEVEL=INFO
+LOCAL_OWNER_EMAIL=owner@example.local
+LOCAL_OWNER_NAME=Local Owner
+```
 
 ## 3. 起動
 
@@ -63,13 +72,14 @@ macOS / Linux:
 まずホストPCで確認します。
 
 ```text
-http://127.0.0.1:8000
 http://127.0.0.1:8000/healthz
+http://127.0.0.1:8000/readyz
 ```
 
-## 4. Tailscale Serve
+- `/healthz`: Flask / Waitressが応答しているか
+- `/readyz`: SQLiteへ問い合わせできるか
 
-別端末から使う場合:
+## 4. Tailscale Serve
 
 Windows:
 
@@ -83,123 +93,150 @@ macOS / Linux:
 ./scripts/tailscale-serve.sh
 ```
 
-```mermaid
-flowchart LR
-    U["利用端末"] --> T["Tailscale Serve"]
-    T --> L["127.0.0.1:8000"]
-    L --> A["Application"]
-```
-
-詳細は [TAILSCALE-SETUP.md](TAILSCALE-SETUP.md) を参照してください。
+Python側は `127.0.0.1` のまま維持します。詳細は [TAILSCALE-SETUP.md](TAILSCALE-SETUP.md) を参照してください。
 
 ## 5. 通常のリリースフロー
 
 ```mermaid
 flowchart TD
-    F["Issue / feature branch"] --> PR["Pull Request"]
-    PR --> CI["GitHub Actions CI"]
+    PR["PR"] --> CI["CI success"]
     CI --> M["Squash Merge"]
-    M --> B["DB backup"]
-    B --> P["Host PC: git pull"]
-    P --> D{"DB migrationあり?"}
-    D -->|"Yes"| MG["Migration適用"]
-    D -->|"No"| R["Restart"]
-    MG --> R
-    R --> V["Smoke test"]
+    M --> B["Host PC: Backup"]
+    B --> P["git pull"]
+    P --> I["Dependency update if needed"]
+    I --> R["Restart"]
+    R --> MG["Pending migrations auto-apply"]
+    MG --> V["/healthz + /readyz + smoke test"]
 ```
 
-## 6. 反映前にバックアップする
+Migrationはアプリ起動時に未適用分だけ自動適用されます。DB変更があるReleaseでは、**起動前に必ずBackupを確保**します。
 
-DB変更がある場合は特に、`data/app.db` のバックアップを取得してから反映します。
+## 6. 反映前Backup
 
-GitのPullはソースを更新しますが、DBの復旧手段にはなりません。
+Windows:
 
-詳細は [SQLITE-SETUP.md](SQLITE-SETUP.md) を参照してください。
+```powershell
+.\.venv\Scripts\python.exe -m scripts.db_tools backup
+```
 
-## 7. mainを最新化する
+macOS / Linux:
 
-稼働PCでアプリを停止できる状態にしてから、リポジトリのmainを更新します。
+```bash
+.venv/bin/python -m scripts.db_tools backup
+```
+
+既定では `backups/` に日時付きDBを作成し、作成後に `PRAGMA quick_check` を実行します。
+
+Backupを外部ドライブ等へ直接保存する場合:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.db_tools backup --backup-dir D:\SQLiteBackup
+```
+
+## 7. 稼働PCのmainを更新
+
+アプリを停止できる状態にしてから:
 
 ```powershell
 git switch main
+git status --short
 git pull origin main
 ```
 
-GitHub Desktopを使う場合はmainへ切り替え、Fetch / Pullします。
-
-**稼働PC上で独自のソース編集を行わない**ことを推奨します。ローカル変更があるとPull時の競合や、GitHubに存在しない本番差分の原因になります。
+`git status --short` に意図しないローカル編集がある場合は、そのままPullしません。稼働PC上で独自のソース編集をしない運用を推奨します。
 
 ## 8. 依存関係が変わった場合
 
-`requirements.txt` / `requirements-dev.txt` が変わった場合は、必要に応じて依存関係を更新します。
+`requirements.txt` / `constraints.txt` が変わったReleaseではruntime依存を更新します。
 
 Windows:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip check
 ```
 
 macOS / Linux:
 
 ```bash
 .venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip check
 ```
 
-大きな依存変更時は、仮想環境を作り直す方法も検討します。
+大きな変更時は `.venv` を作り直して `bootstrap-runtime` を再実行する方法もあります。
 
-## 9. DB Migrationがある場合
+## 9. Migration
 
-運用開始後のSchema変更は、`data/app.db` を削除して作り直しません。
+`app/migrations/` に新しいSQLが追加されている場合、次回アプリ起動時に未適用versionだけ実行します。
 
-```mermaid
-flowchart LR
-    B["Backup"] --> M["Migration"]
-    M --> R["Restart"]
-    R --> C["Data check"]
+```text
+schema_migrations
+  001 initial      applied
+  002 add_category pending -> startupで適用
 ```
 
-Migration手順はアプリごとにREADME / docsへ記録します。
+適用済みMigrationを書き換えないことが重要です。詳細は [SQLITE-SETUP.md](SQLITE-SETUP.md) を参照してください。
 
 ## 10. デプロイ後確認
 
-最低限次を確認します。
-
 ```mermaid
 flowchart TD
-    A["Restart完了"] --> H["/healthz"]
-    A --> P["/ 主要画面"]
+    A["Restart"] --> H["/healthz"]
+    A --> R["/readyz"]
+    A --> P["主要画面"]
     A --> M["/api/me"]
     A --> C["主要CRUD"]
     A --> T["Tailscale URL"]
 ```
 
-- `/healthz` が `status: ok`
+最低限:
+
+- `/healthz` = `status: ok`
+- `/readyz` = `status: ready`, `database: ok`
 - 主要画面が表示される
 - `/api/me` が期待する利用者
 - 主要CRUDが成功する
 - 利用者間データ分離が維持される
-- Tailscale経由で別端末からアクセスできる
-- `.env` / DBが意図したものを参照している
+- Tailscale経由でアクセスできる
 
-## 11. ロールバック
+## 11. DB Integrity確認
 
-問題があった場合に備え、次の2種類を分けます。
+必要に応じて稼働中DBを確認します。
 
-```text
-ソースのロールバック
-  Gitの直前安定版へ戻す
-
-データのロールバック
-  SQLiteバックアップから復元
+```powershell
+.\.venv\Scripts\python.exe -m scripts.db_tools check
 ```
 
-DB変更を伴う場合、ソースだけ戻しても旧Schemaと互換性がない可能性があります。Release前に戻し方を決めます。
+正常時:
 
-## 12. Release運用
+```text
+SQLite quick_check: ok
+```
 
-安定版を明示したい場合はGitHub Release / tagを利用できます。
+## 12. Restore
 
-例:
+問題発生時はソースとDBを別々に考えます。
+
+Restoreはアプリ停止後に実行します。
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.db_tools restore backups\app-....db --yes
+```
+
+既存DBがある場合、Restore直前の `pre-restore` Backupが自動作成されます。
+
+```mermaid
+flowchart LR
+    X["Problem"] --> S["Source rollback"]
+    X --> D["DB restore if needed"]
+    D --> B["pre-restore safety backup"]
+```
+
+Migrationを伴うReleaseでは、旧ソースへ戻すだけでは新Schemaと互換性がない場合があります。Release前に戻し方を確認します。
+
+## 13. Release / Tag
+
+安定版を明示する場合はGitHub Release / tagを利用できます。
 
 ```text
 v1.0.0
@@ -207,36 +244,41 @@ v1.1.0
 v1.1.1
 ```
 
-Releaseには、変更内容、DB Migrationの有無、`.env` 変更、反映手順、ロールバック注意点を記録すると稼働PC更新が安全になります。
+Releaseには以下を記録すると安全です。
 
-## 13. 将来の自動デプロイ
+- 変更内容
+- Migrationの有無
+- `.env` 変更
+- requirements / constraints変更
+- Backup要否
+- 反映手順
+- Rollback注意点
 
-運用が安定した後、main merge後の稼働PC更新を自動化することは可能です。ただし、SQLiteとローカル運用では無条件の自動更新より、次を満たしてから導入します。
+## 14. 将来の自動デプロイ
 
-- CIが安定
-- Backup自動化
-- Migration手順が定型化
-- Restart方法が定型化
-- Health check / rollbackがある
+自動化は、次が安定してから検討します。
 
-```mermaid
-flowchart LR
-    M["main merge"] --> C["CI success"]
-    C --> B["Backup"]
-    B --> P["Pull / Deploy"]
-    P --> H["Health check"]
-    H -->|"NG"| R["Rollback"]
-```
+- CI
+- Backup
+- Migration
+- Restart
+- `/readyz`
+- Rollback
 
-## 14. 本番チェックリスト
+SQLiteのローカルアプリでは、無条件の自動Pullより安全性を優先します。
 
-- mainのCIが成功している
-- 稼働PCのソースに未Commit変更がない
-- DBバックアップがある
-- `.env` 変更の要否を確認した
-- requirements変更の要否を確認した
-- Migrationの要否を確認した
-- Pull後にアプリを再起動した
-- `/healthz` を確認した
-- Tailscale経由を確認した
-- 主要CRUD / 認可を確認した
+## 15. 本番チェックリスト
+
+- main CIが成功
+- 稼働PCに未Commit変更がない
+- DB Backupを取得
+- `.env` 変更有無を確認
+- requirements / constraints変更有無を確認
+- Migration有無を確認
+- Pull後に依存更新が必要なら実施
+- アプリを再起動
+- `/healthz` 成功
+- `/readyz` 成功
+- Tailscale経由成功
+- 主要CRUD / 認可成功
+- 必要なら `scripts.db_tools check` 成功
