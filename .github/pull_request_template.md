@@ -5,7 +5,7 @@ Closes #
 - 
 
 ## テスト
-- [ ] ローカルでpytestを実行した
+- [ ] `scripts/check.ps1` / `scripts/check.sh` または同等の品質チェックを実施した
 - [ ] 必要な手動確認を実施した
 
 ## 影響範囲
@@ -13,9 +13,10 @@ Closes #
 - 影響する機能：
 
 ## 注意事項
-- DB変更：あり / なし
+- Migration / DB変更：あり / なし
+- Backup / Restoreへの影響：あり / なし
 - `.env.example` 変更：あり / なし
-- `requirements` 変更：あり / なし
+- `requirements` / `constraints` 変更：あり / なし
 - 認証・セキュリティへの影響：あり / なし
 
 ## ドキュメント
@@ -28,5 +29,6 @@ Closes #
 - [ ] mainへの直接Commit / Pushではない
 - [ ] CIが成功している
 - [ ] 意図しない差分がない
+- [ ] `.env` / `data/` / `backups/` / 秘密情報が含まれていない
 - [ ] README / 関連docsが最新である
 - [ ] Squash Mergeでmainへ取り込む
