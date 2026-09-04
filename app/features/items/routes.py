@@ -75,9 +75,7 @@ def api_items():
 def api_create_item():
     payload = request.get_json(silent=True) or {}
     try:
-        row = create_item(
-            g.current_user["id"], payload.get("title", ""), payload.get("body", "")
-        )
+        row = create_item(g.current_user["id"], payload.get("title", ""), payload.get("body", ""))
     except ValueError as exc:
         abort(400, description=str(exc))
     return jsonify(_item_to_dict(row)), 201
