@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from app import create_app
 import app.db as db_module
+from app import create_app
 
 
 def test_core_migration_is_always_discovered():
