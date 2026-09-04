@@ -20,6 +20,8 @@ def create_app(test_config=None):
     if test_config:
         app.config.update(test_config)
 
+    app.logger.setLevel(app.config.get("LOG_LEVEL", "INFO"))
+
     data_dir = Path(app.config["APP_DATA_DIR"])
     data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -27,6 +29,7 @@ def create_app(test_config=None):
         secret_path = data_dir / ".secret_key"
         if not secret_path.exists():
             import secrets
+
             secret_path.write_text(secrets.token_hex(32), encoding="utf-8")
         app.config["SECRET_KEY"] = secret_path.read_text(encoding="utf-8").strip()
 
