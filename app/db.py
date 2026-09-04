@@ -25,12 +25,18 @@ def close_db(_error=None):
         db.close()
 
 
+def _migration_paths() -> list[Path]:
+    app_dir = Path(__file__).resolve().parent
+    paths = list((app_dir / "migrations").glob("*.sql"))
+    paths.extend((app_dir / "features").glob("*/migrations/*.sql"))
+    return sorted(paths, key=lambda path: path.as_posix())
+
+
 def _migration_files() -> list[tuple[int, str, Path]]:
-    migration_dir = Path(__file__).with_name("migrations")
     migrations: list[tuple[int, str, Path]] = []
     versions: set[int] = set()
 
-    for path in sorted(migration_dir.glob("*.sql")):
+    for path in _migration_paths():
         match = MIGRATION_PATTERN.fullmatch(path.name)
         if not match:
             raise RuntimeError(f"Invalid migration filename: {path.name}")

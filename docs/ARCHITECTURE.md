@@ -1,230 +1,166 @@
 # Architecture
 
-このテンプレートは、1台のホストPCでPython / FlaskとSQLiteを動かし、必要な場合だけTailscale Serve経由で別端末から利用する、小規模なクローズドWebアプリ向けの構成です。
+## 目的
 
-## 全体構成
+このテンプレートは、Python / Flask + SQLite + Tailscale の共通基盤を再利用しながら、業務機能を `feature` 単位で追加・削除できる構成にします。
+
+最重要ルールは、**共通基盤からサンプル業務ロジックを分離すること**です。
+
+## 全体像
 
 ```mermaid
 flowchart LR
-    U["PC / Smartphone"] -->|"HTTPS / tailnet"| TS["Tailscale Serve"]
-    TS -->|"localhost + identity headers"| W["Waitress\n127.0.0.1:8000"]
+    U["Browser"] --> T["Tailscale Serve"]
+    T --> W["Waitress 127.0.0.1"]
     W --> F["Flask"]
-    F --> A["auth / csrf / security"]
-    F --> R["routes"]
-    R --> S["services"]
-    S --> DB["db.py"]
-    DB --> M["Migration runner"]
-    M --> Q[("SQLite\ndata/app.db")]
-    F --> UI["Jinja / CSS / JavaScript"]
+    F --> C["Common Core"]
+    F --> X["Feature Registry"]
+    X --> I["Optional items sample"]
+    C --> DB[("SQLite")]
+    I --> DB
 ```
 
-ホストPC自身から利用する場合は、ブラウザから直接 `http://127.0.0.1:8000` を開きます。
-
-## 各レイヤー
-
-- **Tailscale Serve**: 別端末からのHTTPS入口
-- **Waitress**: `127.0.0.1` だけでFlaskを待ち受ける
-- **Flask**: Route / Identity / CSRF / Security headers
-- **Service**: 業務処理とSQL
-- **SQLite**: `data/app.db` にデータ保存
-- **Migration runner**: `app/migrations/*.sql` の未適用分だけ実行
-
-## リクエストの流れ
-
-```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant T as Tailscale Serve
-    participant F as Flask
-    participant D as SQLite
-
-    B->>T: HTTPS request
-    T->>F: localhost + identity headers
-    F->>F: resolve_identity / ensure_user
-    F->>D: owner_user_id条件付きSQL
-    D-->>F: current user's rows
-    F-->>B: HTML / JSON
-```
-
-localhostアクセスではTailscale Headerがないため `.env` のローカルオーナーを利用します。
-
-## 起動とMigration
-
-アプリ生成時に `init_db()` が未適用Migrationを確認します。
-
-```mermaid
-flowchart LR
-    S["create_app"] --> I["init_db"]
-    I --> M["schema_migrations"]
-    M --> A["apply pending SQL"]
-    A --> F["Flask ready"]
-```
-
-初期Migration:
+## Common Core
 
 ```text
-app/migrations/001_initial.sql
+app/core/                 共通Route・アクセス制御
+app/auth.py               利用者識別
+app/config.py             設定
+app/csrf.py               CSRF
+app/db.py                 SQLite / Migration runner
+app/security.py           セキュリティヘッダー
+app/features/__init__.py  feature自動検出・登録
+app/templates/            共通Template
+app/static/               共通static
+scripts/                  運用・品質ツール
 ```
 
-Migration SQLとversion記録は同じtransactionで扱い、適用済みversionは再実行しません。
+共通coreは、特定の業務featureが存在しなくても動きます。
 
-## Health / Readiness
+共通URL:
 
-```mermaid
-flowchart LR
-    H["/healthz"] --> P["Process is responding"]
-    R["/readyz"] --> D["SQLite SELECT 1"]
+- `/`
+- `/healthz`
+- `/readyz`
+- `/api/me`
+
+## Optional items sample
+
+```text
+app/features/items/
+├─ __init__.py
+├─ routes.py
+├─ service.py
+├─ templates/items/index.html
+└─ migrations/002_sample_items.sql
 ```
-
-`/healthz` と `/readyz` は利用者登録処理から分離しており、監視アクセスだけで `users` に不要なレコードを作りません。
-
-## 利用者識別
 
 ```mermaid
 flowchart TD
-    R["Request"] --> L{"remote_addr is loopback?"}
-    L -->|"No"| N["Identityなし"]
-    L -->|"Yes"| H{"Tailscale-User-Loginあり?"}
-    H -->|"Yes"| T["Tailscale identity"]
-    H -->|"No"| O["Local owner"]
-    T --> U["users"]
-    O --> U
+    T["Template"] --> C["Core"]
+    T --> S["Sample"]
+    C --> C1["Auth / Security"]
+    C --> C2["SQLite / Tailscale"]
+    C --> C3["Backup / CI"]
+    S --> S1["app/features/items/"]
 ```
 
-Tailscale Identity Headerはloopback経由のときだけ信用します。
+itemsを使わない新規アプリでは、このfolderを削除できます。
 
-## データモデル
+## Feature自動登録
+
+`app/features/__init__.py` は `app/features/` 直下のPython packageを検出します。packageに `register(app)` があればFlask appへ登録します。
 
 ```mermaid
-erDiagram
-    USERS ||--o{ ITEMS : owns
-    USERS {
-      integer id PK
-      text login UK
-      text display_name
-      text identity_source
-    }
-    ITEMS {
-      integer id PK
-      integer owner_user_id FK
-      text title
-      text body
-      text status
-    }
-    SCHEMA_MIGRATIONS {
-      integer version PK
-      text name
-      text applied_at
-    }
+sequenceDiagram
+    participant A as create_app
+    participant F as app.features
+    participant X as feature package
+    A->>F: register_features(app)
+    F->>F: feature packageを検出
+    F->>X: register(app)
+    X-->>A: Blueprint登録
 ```
 
-独自アプリでは `items` を置き換えますが、利用者別データは所有者IDを持たせ、SQLで認可します。
+`app/__init__.py` に `items` というfeature名をハードコードしないため、feature folderを削除してもfactoryを編集する必要がありません。
 
-## フォルダー構成
+## Routeの分離
+
+共通Routeは `app/core/routes.py` に置きます。
+
+items sample Routeは `app/features/items/routes.py` に置きます。
+
+```mermaid
+flowchart LR
+    F["Flask"] --> C["core Blueprint"]
+    F --> I["items Blueprint"]
+    C --> R1["/ /healthz /readyz /api/me"]
+    I --> R2["/items /api/items"]
+```
+
+## Service層
+
+業務featureのSQL / 業務処理はfeature内のServiceへ寄せます。
+
+```mermaid
+flowchart LR
+    R["feature routes"] --> S["feature service"]
+    S --> D["app.db / SQLite"]
+```
+
+共通DB接続やMigration処理は `app/db.py` に残します。
+
+## Migration
+
+Migration sourceは2系統あります。
 
 ```text
-app/
-├─ __init__.py       Flask初期化 / current_user
-├─ auth.py           Identity解決
-├─ config.py         環境設定 / LOG_LEVEL
-├─ csrf.py           CSRF
-├─ db.py             SQLite接続 / Migration / users同期
-├─ migrations/       番号付きSQL Migration
-├─ routes.py         画面 / API / health / ready
-├─ security.py       Security headers
-├─ services/         業務処理
-├─ templates/        HTML
-└─ static/           CSS / JavaScript
-
-scripts/
-├─ bootstrap*        開発環境
-├─ bootstrap-runtime* 稼働環境
-├─ check*            Ruff / pytest / Coverage
-├─ db_tools.py       Backup / Restore / integrity
-├─ start*            アプリ起動
-├─ tailscale-*       Tailscale Serve
-└─ setup-github.ps1  GitHub初期設定
-
-tests/               pytest
-docs/                目的別ドキュメント
-github/              Ruleset JSON
+app/migrations/*.sql                    core Migration
+app/features/*/migrations/*.sql         feature Migration
 ```
 
-## 品質基盤
+初期状態:
+
+```text
+001_initial.sql                         users
+002_sample_items.sql                    optional items sample
+```
+
+全Migrationは共通の `schema_migrations` で管理し、version番号はリポジトリ全体で一意にします。
+
+## Identity / Authorization
+
+```mermaid
+flowchart TD
+    R["Request"] --> I["resolve_identity"]
+    I --> U["users"]
+    U --> G["g.current_user"]
+    G --> C["core / feature route"]
+    C --> S["Service"]
+    S --> Q["SQL owner condition"]
+```
+
+Tailscale到達制御とアプリ内認可は別の層です。利用者別データはSQLでも所有者条件を付けます。
+
+## Tailscale境界
 
 ```mermaid
 flowchart LR
-    C["Code"] --> R["Ruff lint / format"]
-    R --> T["pytest + Coverage"]
-    T --> P11["Python 3.11"]
-    T --> P12["3.12"]
-    T --> P13["3.13"]
-    T --> P14["3.14"]
-    C --> W["Windows PowerShell 5.1"]
+    B["Browser on tailnet"] --> TS["Tailscale Serve"]
+    TS --> L["127.0.0.1:8000"]
+    L --> F["Flask / Waitress"]
 ```
 
-- `scripts/check.ps1` / `check.sh` をローカル品質ゲートにする
-- Coverage最低80%
-- `constraints.txt` でCI確認済み依存バージョンを固定
-- Dependabotでpip / GitHub Actionsを定期確認
+Flask / Waitressは `0.0.0.0` へ公開しません。Identity Headerはloopback経由のときだけ信用します。
 
-## Backup / Restore
+## Templateから独自アプリへ
 
 ```mermaid
 flowchart LR
-    DB[("data/app.db")] -->|"SQLite backup API"| B[("backups/*.db")]
-    B --> C["quick_check"]
-    B --> R["Restore"]
-    R --> S["pre-restore safety backup"]
+    A["Use this template"] --> B["不要ならitems削除"]
+    B --> C["独自feature追加"]
+    C --> D["Migration / Service / Route / UI"]
+    D --> E["Tests / check / CI"]
 ```
 
-実データの正本はホストPCです。GitHubはSQLiteデータのBackupではありません。
-
-## 残す共通基盤
-
-- `127.0.0.1` bind
-- Tailscale Serve
-- Identity Headerの信頼条件
-- `g.current_user`
-- SQLでの所有者チェック
-- CSRF / Security headers
-- Migration / SQLite接続
-- Backup / Restore
-- Ruff / pytest / Coverage
-- GitHub CI / Ruleset
-
-## 置き換える業務部分
-
-- `items` 初期Schema / 後続Migration
-- `app/services/items.py`
-- 業務Route / API
-- Templates / CSS / JavaScript
-- 業務テスト
-- アプリ名 / `.env.example`
-
-## 想定する規模
-
-向いている用途:
-
-- 個人・家庭
-- 小規模チーム
-- 社内の小さな補助ツール
-- 1台のホストPCで十分なアプリ
-
-構成見直しを検討する要件:
-
-- 複数サーバーから同じDBへ接続
-- 大量の同時書き込み
-- インターネット一般公開
-- 高可用性 / 冗長化
-
-その場合はPostgreSQL等へのDB移行や公開Web構成を別途設計します。
-
-## 関連ドキュメント
-
-- [SQLITE-SETUP.md](SQLITE-SETUP.md)
-- [TAILSCALE-SETUP.md](TAILSCALE-SETUP.md)
-- [AUTH-CRUD.md](AUTH-CRUD.md)
-- [DEVELOPMENT.md](DEVELOPMENT.md)
-- [DEPLOYMENT.md](DEPLOYMENT.md)
-- [SECURITY.md](SECURITY.md)
+このfeature境界を維持することで、テンプレート本体へ案件固有コードが混ざりにくくなります。

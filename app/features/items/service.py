@@ -6,11 +6,11 @@ def list_items(owner_user_id: int):
         get_db()
         .execute(
             """
-        SELECT id, title, body, status, created_at, updated_at
-        FROM items
-        WHERE owner_user_id = ?
-        ORDER BY updated_at DESC, id DESC
-        """,
+            SELECT id, title, body, status, created_at, updated_at
+            FROM items
+            WHERE owner_user_id = ?
+            ORDER BY updated_at DESC, id DESC
+            """,
             (owner_user_id,),
         )
         .fetchall()
@@ -37,10 +37,10 @@ def get_item(owner_user_id: int, item_id: int):
         get_db()
         .execute(
             """
-        SELECT id, title, body, status, created_at, updated_at
-        FROM items
-        WHERE id = ? AND owner_user_id = ?
-        """,
+            SELECT id, title, body, status, created_at, updated_at
+            FROM items
+            WHERE id = ? AND owner_user_id = ?
+            """,
             (item_id, owner_user_id),
         )
         .fetchone()

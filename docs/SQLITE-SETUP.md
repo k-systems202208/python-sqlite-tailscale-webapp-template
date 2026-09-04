@@ -1,161 +1,126 @@
-# SQLite Setup
+# SQLite Setup / Migration / Backup
 
-このテンプレートのデータはホストPC上のSQLiteへ保存します。DBサーバーは不要です。Schema変更は番号付きMigration、保全は共通Backup / Restoreツールで扱います。
+このテンプレートではSQLite接続・Migration runner・Backup / Restoreを**共通基盤**として持ち、業務Schemaはcoreまたは各featureのMigrationへ分けます。
 
 ## 全体像
 
 ```mermaid
 flowchart LR
-    F["Flask"] --> D["app/db.py"]
-    D --> M["app/migrations/*.sql"]
-    D --> DB[("data/app.db")]
-    DB --> B["scripts.db_tools"]
-    B --> BK[("backups/")]
+    C["app/migrations"] --> R["Migration runner"]
+    F["app/features/*/migrations"] --> R
+    R --> M[("schema_migrations")]
+    R --> D[("data/app.db")]
 ```
 
-## 1. 初回作成
+## Migrationの場所
 
-アプリ起動時に `app/db.py` が `app/migrations/` のSQLを番号順に確認し、未適用分だけ実行します。
+共通core:
+
+```text
+app/migrations/*.sql
+```
+
+feature固有:
+
+```text
+app/features/*/migrations/*.sql
+```
+
+Migration runnerは両方を検出し、version番号順に適用します。versionはリポジトリ全体で重複させません。
 
 初期状態:
 
 ```text
-app/migrations/
-└─ 001_initial.sql
+app/migrations/001_initial.sql
+└─ users                     共通利用者
+
+app/features/items/migrations/002_sample_items.sql
+└─ items                     削除可能なサンプル
 ```
 
-既定DB:
+## itemsサンプルを使わない新規アプリ
+
+**初回起動前**なら次だけで構いません。
 
 ```text
-data/app.db
+app/features/items/ を削除
 ```
 
-適用履歴:
+items Migrationもfeature folder内にあるため、初回起動時には検出されず `items` テーブルは作成されません。
 
-```text
-schema_migrations
-  version
-  name
-  applied_at
+```mermaid
+flowchart LR
+    D["Delete items feature before first start"] --> C["core migration only"]
+    C --> U[("users")]
 ```
 
-`data/` はGit管理対象外です。
+## 既にversion 1を適用したDBとの互換性
 
-## 2. Migrationの命名
+Issue #21より前のテンプレートでは、version 1の `001_initial.sql` が `users` と `items` の両方を作成していました。
 
-形式:
+分離後は:
 
-```text
-NNN_name.sql
-```
+- version 1: core `users`
+- version 2: sample `items`
+
+です。
+
+既存DBでは `schema_migrations` にversion 1 `initial` が記録済みなのでversion 1を再実行しません。version 2は `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS` で適用されるため、既存itemsデータを削除せずsample Migrationの適用履歴だけ追加できます。この互換動作は自動テストしています。
+
+## 適用済みMigrationは書き換えない
+
+通常のアプリ開発では、一度適用したMigrationを後から変更しません。
 
 例:
 
 ```text
 001_initial.sql
-002_add_category.sql
-003_add_audit_log.sql
+002_sample_items.sql
+003_equipment.sql
+004_add_equipment_category.sql
 ```
 
-Version番号は重複させません。Migration名を適用後に変更すると、コード側が不整合として検出します。
+実運用後のSchema変更は新しい番号を追加します。
 
-## 3. Migrationの実行
+> version 1のcore/sample分離はテンプレート自身の構造変更に伴う互換移行です。独自アプリ運用では同じ方法で適用済みMigrationを書き換えず、新Migrationを追加してください。
 
-```mermaid
-flowchart TD
-    S["App start"] --> C["schema_migrations確認"]
-    C --> F{"version適用済み?"}
-    F -->|"Yes"| N["Skip"]
-    F -->|"No"| B["BEGIN IMMEDIATE"]
-    B --> Q["SQL実行"]
-    Q --> R["version記録"]
-    R --> M["COMMIT"]
-```
+## SQLite接続設定
 
-Migration SQLと履歴登録は同じSQLite transaction内で処理します。途中で失敗した場合はMigrationを適用済みとして記録しません。
-
-## 4. 既存テンプレートDBからの移行
-
-旧版では `schema.sql` により `users` / `items` が既に作成されていました。現在の `001_initial.sql` は `CREATE TABLE IF NOT EXISTS` を使うため、旧Schemaを持つDBでも既存データを消さずに初回Migration履歴を登録できます。
-
-Migrationテストでは、この既存Schemaからのbaselineも確認しています。
-
-## 5. サンプルSchema
-
-```mermaid
-erDiagram
-    USERS ||--o{ ITEMS : owns
-    USERS {
-      integer id PK
-      text login UK
-      text display_name
-      text identity_source
-      text created_at
-      text last_seen_at
-    }
-    ITEMS {
-      integer id PK
-      integer owner_user_id FK
-      text title
-      text body
-      text status
-      text created_at
-      text updated_at
-    }
-```
-
-`items.owner_user_id` により利用者別データ分離を行います。
-
-## 6. SQLite接続設定
-
-`app/db.py` はリクエスト単位に接続し、次を有効にします。
-
-- `PRAGMA foreign_keys = ON`
-- `PRAGMA journal_mode = WAL`
-- `sqlite3.Row`
-
-RouteやTemplateから独自に接続を作らず、共通 `get_db()` を使います。
-
-## 7. 新しいテーブル・列を追加する
-
-運用開始前でまだデータを持たない独自アプリ化の初期段階なら、`001_initial.sql` を自分の初期Schemaへ作り替えて構いません。
-
-実データを保存し始めた後は、既存Migrationを書き換えず追加します。
+`app/db.py` は接続ごとに次を有効化します。
 
 ```sql
--- 002_add_category.sql
-ALTER TABLE items ADD COLUMN category TEXT NOT NULL DEFAULT '';
-CREATE INDEX idx_items_category ON items(category);
+PRAGMA foreign_keys = ON;
+PRAGMA journal_mode = WAL;
 ```
 
-```mermaid
-flowchart LR
-    C["Code change"] --> M["New migration"]
-    M --> T["Test DB"]
-    T --> B["Backup"]
-    B --> P["Production apply"]
+- Foreign Keyを有効化
+- WALで通常利用時の読み書きを扱いやすくする
+
+## `schema_migrations`
+
+適用履歴は次の共通テーブルで管理します。
+
+```text
+version
+name
+applied_at
 ```
 
-SQLiteのALTER TABLE制約で複雑な変更が必要な場合は、新テーブル作成 → データコピー → rename等のMigrationを用意します。
+同じversionは2回適用しません。version重複やname変更はエラーにします。
 
-## 8. 認可はSQLでも行う
+## featureを追加するとき
 
-利用者本人だけが扱うデータなら、所有者列を持たせます。
+設備管理featureの例:
 
-```sql
-CREATE TABLE equipment (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    owner_user_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE CASCADE
-);
+```text
+app/features/equipment/
+└─ migrations/
+   └─ 003_equipment.sql
 ```
 
-取得・更新・削除では `owner_user_id` を条件に含めます。画面上の非表示だけを認可として使いません。
+feature packageとSchemaを同じ境界に置くことで、どのテーブルがどの機能に属するかを初心者でも追いやすくします。
 
-## 9. Backup
-
-共通ツールはSQLiteのbackup APIを使うため、単純なファイルコピーより整合性を保ちやすい方法です。
+## Backup
 
 Windows:
 
@@ -169,88 +134,36 @@ macOS / Linux:
 .venv/bin/python -m scripts.db_tools backup
 ```
 
-既定保存先:
+SQLite backup APIを利用し、既定では `backups/` へ日時付きDBを作成します。
 
-```text
-backups/app-YYYYMMDD-HHMMSS-ffffff.db
-```
-
-Backup作成後は自動で `PRAGMA quick_check` を実行します。`backups/` はGit管理対象外です。
-
-保存先を変更する場合:
-
-```powershell
-.\.venv\Scripts\python.exe -m scripts.db_tools backup --backup-dir D:\SQLiteBackup
-```
-
-## 10. Integrity check
-
-現在DB:
+## Integrity check
 
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.db_tools check
 ```
 
-任意DB:
+内部で `PRAGMA quick_check` を確認します。
+
+## Restore
+
+アプリを停止してから明示実行します。
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.db_tools check --database backups\app-....db
+.\.venv\Scripts\python.exe -m scripts.db_tools restore backups\app-YYYYMMDD-HHMMSS-xxxxxx.db --yes
 ```
 
-正常時は `SQLite quick_check: ok` を表示します。
+Restore前には現在DBの `pre-restore` Backupを作成します。古い `-wal` / `-shm` も安全に処理します。
 
-## 11. Restore
-
-**アプリを停止してから実行します。**
-
-```powershell
-.\.venv\Scripts\python.exe -m scripts.db_tools restore backups\app-....db --yes
-```
-
-既存 `data/app.db` がある場合は、置換前に自動で `pre-restore` Backupを作成します。
+## 実データ運用前の確認
 
 ```mermaid
-flowchart LR
-    B["Selected backup"] --> C["quick_check"]
-    C --> S["Current DB safety backup"]
-    S --> R["Restore to temp DB"]
-    R --> V["quick_check"]
-    V --> A["Atomic replace"]
+flowchart TD
+    A["Schema設計"] --> B["Migration"]
+    B --> C["Test DBで適用"]
+    C --> D["scripts/check"]
+    D --> E["Backup"]
+    E --> F["Restore test"]
+    F --> G["実データ運用"]
 ```
 
-`--yes` を付けないRestoreは拒否されます。
-
-## 12. Backup運用で決めること
-
-- 外部保存先
-- 頻度
-- 保存世代数
-- 暗号化 / OSアクセス権
-- 端末故障時に残る場所か
-- Restoreテスト頻度
-
-GitHubはSQLite実データのバックアップ先ではありません。
-
-## 13. SQLiteが向いている範囲
-
-このテンプレートは1台のホストPCで動く個人・家庭・小規模チーム向けです。
-
-構成見直しを検討する条件:
-
-- 複数サーバーから同じDBへ接続
-- 高頻度な同時書き込み
-- インターネット一般公開
-- 高可用性 / DB冗長化
-
-その場合はSQLiteファイルを共有フォルダーへ置くのではなく、PostgreSQL等への移行を検討します。
-
-## 14. チェックリスト
-
-- `data/` / `backups/` がGit管理対象外
-- 新Migrationは新しいversion番号
-- 適用済みMigrationを書き換えていない
-- DB変更テストがある
-- SQLで認可している
-- 本番反映前にBackupしている
-- `quick_check` が成功する
-- Restore手順を実際に確認している
+MigrationとBackupは別物です。GitHubへSQLを保存していてもSQLite実データのBackupにはなりません。

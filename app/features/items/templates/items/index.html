@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="hero">
-  <h1>Starter items</h1>
-  <p>This CRUD screen is sample business logic. Replace it with your own domain.</p>
+  <h1>Starter items sample</h1>
+  <p>This CRUD screen is removable sample business logic under <code>app/features/items/</code>.</p>
+  <p><a href="{{ url_for('core.index') }}">Back to common core</a></p>
 </section>
 
 <section class="card">
-  <form method="post" action="{{ url_for('main.add_item') }}" class="stack">
+  <form method="post" action="{{ url_for('items.add_item') }}" class="stack">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Title
       <input name="title" maxlength="200" required placeholder="Example: Build my own app">
@@ -27,11 +28,11 @@
         <small>{{ item['status'] }} · updated {{ item['updated_at'] }}</small>
       </div>
       <div class="actions">
-        <form method="post" action="{{ url_for('main.toggle', item_id=item['id']) }}">
+        <form method="post" action="{{ url_for('items.toggle', item_id=item['id']) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="secondary">Toggle</button>
         </form>
-        <form method="post" action="{{ url_for('main.delete', item_id=item['id']) }}" data-confirm="Delete this item?">
+        <form method="post" action="{{ url_for('items.delete', item_id=item['id']) }}" data-confirm="Delete this item?">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="danger">Delete</button>
         </form>

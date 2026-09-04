@@ -127,14 +127,50 @@ CIと `scripts/check` は次を対象にCoverageを取得します。
 
 最低基準は80%です。新しい共通基盤を追加してCoverageが下がった場合、まず意味のあるテスト追加を優先します。
 
-## SQLite変更
+## 共通基盤とfeatureの開発境界
 
-Schema変更は `app/migrations/` に新しい番号付きSQLを追加します。
+共通処理は `app/core/` や `app/db.py` 等へ置き、業務固有処理は `app/features/<feature>/` にまとめます。
+
+初期 `items` は削除可能なサンプルです。
 
 ```text
-001_initial.sql
-002_add_category.sql
-003_add_audit_log.sql
+app/features/items/
+```
+
+featureは自動検出されるため、独自featureを追加するたびに `app/__init__.py` へ個別importを増やしません。各featureの `register(app)` からBlueprintを登録します。
+
+## SQLite変更
+
+Migrationは用途によって置き場所を分けます。
+
+共通基盤のSchema変更:
+
+```text
+app/migrations/*.sql
+```
+
+feature固有のSchema変更:
+
+```text
+app/features/<feature>/migrations/*.sql
+```
+
+Migration runnerは両方を集め、**全体でversion番号が一意になること**を要求します。
+
+初期状態:
+
+```text
+app/migrations/001_initial.sql
+app/features/items/migrations/002_sample_items.sql
+```
+
+itemsサンプルを初回起動前に削除した場合は、`002` を独自Migrationで使用できます。一方、一度 `002_sample_items` を適用したDBではversion 2が履歴に残るため、featureを削除しても `002` を再利用せず、次の未使用番号を使います。
+
+例:
+
+```text
+003_equipment.sql
+004_add_equipment_category.sql
 ```
 
 実データ運用開始後は適用済みMigrationを書き換えません。
@@ -148,6 +184,26 @@ flowchart LR
 ```
 
 詳細は [SQLITE-SETUP.md](SQLITE-SETUP.md) を参照してください。
+
+## テストの分離
+
+共通基盤テストは特定業務featureに依存させません。
+
+items固有テストは次へ集約しています。
+
+```text
+tests/test_sample_items.py
+```
+
+items featureが存在しない場合、このファイルは自動skipされます。そのため `app/features/items/` を削除した状態でも、共通基盤の品質チェックとCIを維持できます。
+
+独自featureを追加したら、そのfeatureの正常系だけでなく以下もテストします。
+
+- 不正入力
+- 他利用者データの参照・更新・削除拒否
+- CSRF
+- Migration適用 / 再実行
+- 既存データ互換性が必要な場合の移行
 
 ## 依存関係
 
