@@ -34,9 +34,29 @@ def test_extension_guide_keeps_domain_features_outside_common_core():
     assert "SQLでも認可" in extending
 
 
-def test_readme_links_doctor_operations_and_extension_guidance():
-    readme = read("README.md")
+def test_beginner_guide_explains_the_full_github_desktop_workflow():
+    beginner = read("BEGINNER-GUIDE.md")
 
+    assert "GitHub Desktop" in beginner
+    assert "Commit" in beginner
+    assert "Push" in beginner
+    assert "Pull Request" in beginner
+    assert "CI" in beginner
+    assert "Squash Merge" in beginner
+    assert "Conflict" in beginner
+    assert "ChatGPT / Codex" in beginner
+
+
+def test_main_guides_link_beginner_guidance_and_lifecycle_docs():
+    readme = read("README.md")
+    getting_started = read("GETTING-STARTED.md")
+    development = read("docs/DEVELOPMENT.md")
+    github_setup = read("docs/GITHUB-SETUP.md")
+
+    assert "BEGINNER-GUIDE.md" in readme
+    assert "BEGINNER-GUIDE.md" in getting_started
+    assert "BEGINNER-GUIDE.md" in development
+    assert "BEGINNER-GUIDE.md" in github_setup
     assert "python -m scripts.doctor" in readme
     assert "docs/OPERATIONS.md" in readme
     assert "docs/EXTENDING.md" in readme
