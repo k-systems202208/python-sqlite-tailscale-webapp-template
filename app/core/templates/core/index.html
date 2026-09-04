@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <h1>Common core is running</h1>
+  <p>Flask / SQLite / Tailscale identity / CSRF / security / health checks are the reusable core.</p>
+</section>
+
+<section class="card">
+  <h2>Core endpoints</h2>
+  <ul>
+    <li><a href="{{ url_for('core.healthz') }}">/healthz</a> - process health</li>
+    <li><a href="{{ url_for('core.readyz') }}">/readyz</a> - SQLite readiness</li>
+    <li><a href="{{ url_for('core.api_me') }}">/api/me</a> - current user</li>
+  </ul>
+</section>
+
+{% if items_sample_enabled %}
+<section class="card">
+  <h2>Optional sample</h2>
+  <p><code>app/features/items/</code> is removable sample business logic.</p>
+  <p><a href="{{ url_for('items.index') }}">Open items sample</a></p>
+</section>
+{% else %}
+<section class="card">
+  <h2>Ready for your app</h2>
+  <p>No sample feature is registered. Add your own feature under <code>app/features/</code>.</p>
+</section>
+{% endif %}
+{% endblock %}
