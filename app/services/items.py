@@ -2,15 +2,19 @@ from app.db import get_db
 
 
 def list_items(owner_user_id: int):
-    return get_db().execute(
-        """
+    return (
+        get_db()
+        .execute(
+            """
         SELECT id, title, body, status, created_at, updated_at
         FROM items
         WHERE owner_user_id = ?
         ORDER BY updated_at DESC, id DESC
         """,
-        (owner_user_id,),
-    ).fetchall()
+            (owner_user_id,),
+        )
+        .fetchall()
+    )
 
 
 def create_item(owner_user_id: int, title: str, body: str = ""):
@@ -29,14 +33,18 @@ def create_item(owner_user_id: int, title: str, body: str = ""):
 
 
 def get_item(owner_user_id: int, item_id: int):
-    return get_db().execute(
-        """
+    return (
+        get_db()
+        .execute(
+            """
         SELECT id, title, body, status, created_at, updated_at
         FROM items
         WHERE id = ? AND owner_user_id = ?
         """,
-        (item_id, owner_user_id),
-    ).fetchone()
+            (item_id, owner_user_id),
+        )
+        .fetchone()
+    )
 
 
 def toggle_item(owner_user_id: int, item_id: int) -> bool:
