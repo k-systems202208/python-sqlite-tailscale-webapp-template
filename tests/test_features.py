@@ -2,9 +2,9 @@ from pathlib import Path
 
 from flask import Flask
 
-from app import create_app
 import app.db as db_module
 import app.features as features
+from app import create_app
 from conftest import tailscale_headers
 
 
