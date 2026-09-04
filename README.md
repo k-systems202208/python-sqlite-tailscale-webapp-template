@@ -33,6 +33,7 @@ flowchart LR
 - `scripts/` - bootstrap / check / DB tools / Tailscale / GitHub設定
 - `/`, `/healthz`, `/readyz`, `/api/me`
 - Ruff / pytest / Coverage / GitHub Actions CI
+- itemsサンプル削除後も成立するsampleless CI smoke test
 - Backup / Restoreと運用Runbook
 - feature拡張の共通契約
 
@@ -248,7 +249,7 @@ itemsサンプルのテストは `tests/test_sample_items.py` に分離してい
 
 ## CI
 
-GitHub ActionsではPython 3.11 / 3.12 / 3.13 / 3.14の各jobでdoctor、PowerShell / shell構文、依存関係、Ruff、pytest + Coverageを確認し、別jobでWindows PowerShell 5.1のGitHub設定スモークテストを実行します。
+GitHub ActionsではPython 3.11 / 3.12 / 3.13 / 3.14の各jobでdoctor、PowerShell / shell構文、依存関係、Ruff、pytest + Coverageを確認します。その後、CI workspace上で `app/features/items/` を削除し、共通pytest + Coverageを再実行します。これにより**itemsサンプルを外しても共通基盤が成立すること**を継続検証します。別jobではWindows PowerShell 5.1のGitHub設定スモークテストを実行します。
 
 Required Check名は `test (3.11)`〜`test (3.14)` と `windows-powershell-51` です。
 
@@ -275,6 +276,7 @@ flowchart TD
     Q -->|"Gitも初めて"| B["BEGINNER-GUIDE"]
     Q -->|"まず起動したい"| G["GETTING-STARTED"]
     Q -->|"自分のアプリに変えたい"| C["CUSTOMIZING / EXTENDING"]
+    Q -->|"テンプレートとして受入確認したい"| S["TEMPLATE-SMOKE-TEST"]
     Q -->|"技術を理解したい"| A["ARCHITECTURE / SQLITE / TAILSCALE / AUTH / SECURITY"]
     Q -->|"GitHubを設定したい"| H["GITHUB-SETUP"]
     Q -->|"反映・運用したい"| O["DEPLOYMENT / OPERATIONS"]
@@ -285,10 +287,11 @@ flowchart TD
 - [BEGINNER-GUIDE.md](BEGINNER-GUIDE.md) - Git / GitHub / GitHub Desktopをゼロから説明し、最初のPRを練習
 - [GETTING-STARTED.md](GETTING-STARTED.md) - Clone後のセットアップと初回起動
 
-### 自分のアプリへ変える
+### 自分のアプリへ変える・受入確認する
 
 - [docs/CUSTOMIZING.md](docs/CUSTOMIZING.md) - itemsサンプルから独自アプリへ作り替える
 - [docs/EXTENDING.md](docs/EXTENDING.md) - 独自feature追加時の共通契約
+- [docs/TEMPLATE-SMOKE-TEST.md](docs/TEMPLATE-SMOKE-TEST.md) - Use this templateからsample削除・独自feature・PRまでの第三者利用受入テスト
 
 ### 技術を理解する
 

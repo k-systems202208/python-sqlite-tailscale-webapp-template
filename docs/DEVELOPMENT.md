@@ -110,6 +110,7 @@ GitHub ActionsはPush / Pull Requestで次を確認します。
 - Ruff lint
 - Ruff format check
 - pytest + Coverage 80%以上
+- items feature削除後の共通pytest + Coverage 80%以上
 - 全 `.ps1` のPowerShell構文
 - 全 `.sh` のshell構文
 - `setup-github.ps1` のUTF-8 BOM
@@ -122,10 +123,14 @@ flowchart TD
     Q --> P12["Python 3.12"]
     Q --> P13["Python 3.13"]
     Q --> P14["Python 3.14"]
+    P11 --> S["items削除後 smoke"]
+    P12 --> S
+    P13 --> S
+    P14 --> S
     P --> W["Windows PowerShell 5.1"]
 ```
 
-Ruleset定義のRequired Status Check名は `test (3.11)`〜`test (3.14)` と `windows-powershell-51` のままです。doctorは既存Python job内へ追加するため、Ruleset名の変更は不要です。
+Ruleset定義のRequired Status Check名は `test (3.11)`〜`test (3.14)` と `windows-powershell-51` のままです。sampleless smoke testは既存Python job内へ追加するため、Ruleset名の変更は不要です。
 
 ## Ruff
 
@@ -163,6 +168,18 @@ app/features/items/
 featureは自動検出されるため、独自featureを追加するたびに `app/__init__.py` へ個別importを増やしません。各featureの `register(app)` からBlueprintを登録します。
 
 新しいfeatureの配置、Route / Service、認可、Migration、テストの共通契約は [EXTENDING.md](EXTENDING.md) を参照してください。
+
+## Template smoke test
+
+通常のpytest + Coverage成功後、CIでは一時workspace上で次を削除します。
+
+```text
+app/features/items/
+```
+
+その状態で共通pytest + Coverageを再実行し、items featureが無くてもcore、認証、Migration、doctor、DB tools等が成立することを確認します。`tests/test_sample_items.py` はitemsが無い場合にskipされます。
+
+テンプレートの大きな構成変更時には、自動CIだけでなく **Use this template → Clone → GitHub設定 → bootstrap → 基準check → items削除 → 独自feature → Pull Request** までを手動で通します。詳細は [TEMPLATE-SMOKE-TEST.md](TEMPLATE-SMOKE-TEST.md) を参照してください。
 
 ## SQLite変更
 
@@ -209,7 +226,7 @@ flowchart LR
 ```text
 tests/test_sample_items.py       itemsサンプル
 tests/test_doctor.py             doctor
-tests/test_template_lifecycle.py 開発・運用・拡張契約
+tests/test_template_lifecycle.py 開発・運用・拡張・smoke契約
 ```
 
 items featureが存在しない場合、sample testは自動skipされます。そのため `app/features/items/` を削除した状態でも共通基盤の品質チェックとCIを維持できます。
@@ -263,6 +280,7 @@ GitHub DesktopでBranch作成からPR作成までの具体的な操作を確認�
 - doctorにFAILがない
 - `scripts/check` または同等の品質確認が成功
 - GitHub Actionsが成功
+- sampleless smoke testが成功
 - `.env` / `data/` / `backups/` / 秘密情報が含まれていない
 - Migration変更のデータ影響を確認した
 - 認証・認可を弱めていない
