@@ -2,7 +2,6 @@ from pathlib import Path
 
 from scripts.doctor import diagnose, parse_env
 
-
 REQUIRED_FILES = (
     "pyproject.toml",
     "requirements.txt",
