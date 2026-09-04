@@ -2,22 +2,20 @@
 
 このテンプレートは特定業務向けの完成アプリではなく、Python / Flask + SQLite + Tailscale を使ったクローズドWebアプリ開発の共通土台です。
 
-`items` は認証・認可・CRUD・Migrationの実装例です。新しいアプリでは自由に削除・置換してください。
+`app/features/items/` は認証・認可・CRUD・feature Migrationを確認するための**丸ごと削除可能なサンプル**です。新しい業務機能は `app/features/<feature>/` にまとめます。
 
 ## カスタマイズの全体像
 
 ```mermaid
 flowchart TD
-    T["共通テンプレート"] --> K["残す共通基盤"]
-    T --> C["案件ごとに変更"]
-    K --> K1["Flask / Waitress"]
-    K --> K2["localhost / Tailscale"]
-    K --> K3["Auth / CSRF / Security"]
-    K --> K4["Migration / Backup / CI"]
-    C --> C1["アプリ名 / UI"]
-    C --> C2["itemsサンプル"]
-    C --> C3["Migration / Service / Route"]
-    C --> C4["業務テスト"]
+    T["Template"] --> C["Common Core"]
+    T --> S["Optional Sample"]
+    T --> N["Your Feature"]
+    C --> C1["Auth / Security"]
+    C --> C2["SQLite / Migration"]
+    C --> C3["Tailscale / Backup / CI"]
+    S --> S1["app/features/items/"]
+    N --> N1["app/features/<feature>/"]
 ```
 
 ## 1. 最初に決めること
@@ -31,65 +29,125 @@ flowchart TD
 - Tailscale利用範囲
 - Backup保存先・頻度
 
-## 2. 環境設定
+## 2. 共通基盤とitemsサンプルの境界
 
-`.env` を自分のアプリへ変更します。
-
-```env
-APP_NAME=家庭用在庫管理
-LOG_LEVEL=INFO
-LOCAL_OWNER_EMAIL=owner@example.com
-LOCAL_OWNER_NAME=山田太郎
-```
-
-アプリ独自の環境変数を追加した場合は `.env.example` にダミー値と説明を追加します。秘密情報の実値は書きません。
-
-## 3. `items` サンプルの範囲
+原則として残すもの:
 
 ```text
-app/migrations/001_initial.sql   users / items初期Schema
-app/services/items.py            items CRUD
-app/routes.py                    items画面 / API
-app/templates/                   サンプル画面
-app/static/                      CSS / JavaScript
-tests/                           サンプル仕様と共通基盤テスト
+app/core/
+app/auth.py
+app/config.py
+app/csrf.py
+app/db.py
+app/security.py
+app/features/__init__.py
+app/templates/base.html
+app/templates/unauthorized.html
+scripts/
 ```
 
-サンプルを削除する場合も、認証・CSRF・Migration・Backup・品質ゲートなどの共通基盤は維持します。
+削除可能なサンプル:
 
-## 4. 独自Schemaへ変更する
+```text
+app/features/items/
+├─ __init__.py
+├─ routes.py
+├─ service.py
+├─ templates/items/index.html
+└─ migrations/002_sample_items.sql
+```
 
-### まだ実データを使っていない新規アプリ
+新規アプリでitemsを使わない場合は**このフォルダを丸ごと削除**します。featureは自動検出されるため、`app/__init__.py` の登録処理を編集する必要はありません。
 
-テンプレートから作った直後であれば `001_initial.sql` を独自アプリの初期Schemaへ編集できます。
+## 3. itemsを削除するタイミング
+
+### 初回起動前
+
+最も簡単です。
+
+```text
+app/features/items/ を削除
+        ↓
+初回起動
+        ↓
+core Migrationだけ適用
+        ↓
+itemsテーブルは作られない
+```
+
+### すでに起動・運用した後
+
+適用済みMigration履歴は書き換えません。コードとしてitems featureを使わなくするだけならfeature削除で構いませんが、既存 `items` テーブルも削除したい場合は新しいMigrationを追加します。
+
+実データがある場合は先にBackupを取得します。
+
+## 4. 独自featureを作る
+
+例として設備管理を追加する場合:
+
+```text
+app/features/equipment/
+├─ __init__.py
+├─ routes.py
+├─ service.py
+├─ templates/equipment/
+│  └─ index.html
+└─ migrations/
+   └─ 003_equipment.sql
+```
+
+`__init__.py` は次の形にします。
+
+```python
+def register(app) -> None:
+    from .routes import bp
+    app.register_blueprint(bp)
+```
+
+`app/features/` の自動検出機構がこの `register(app)` を呼び出します。
+
+## 5. Migrationを追加する
+
+共通Migration:
+
+```text
+app/migrations/*.sql
+```
+
+feature固有Migration:
+
+```text
+app/features/*/migrations/*.sql
+```
+
+全Migrationでversion番号は一意にします。
 
 例:
 
-```sql
-CREATE TABLE equipment (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    owner_user_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    location TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-```
-
-### 実データ運用開始後
-
-適用済みMigrationを書き換えず、新しい番号を追加します。
-
 ```text
 001_initial.sql
-002_add_equipment_category.sql
-003_add_equipment_index.sql
+002_sample_items.sql
+003_equipment.sql
+004_equipment_category.sql
 ```
 
-詳細は [SQLITE-SETUP.md](SQLITE-SETUP.md) を参照してください。
+適用済みMigrationは編集せず、新しい番号を追加します。詳細は [SQLITE-SETUP.md](SQLITE-SETUP.md) を参照してください。
 
-## 5. 認可はSQLでも行う
+## 6. Serviceへ業務処理を分ける
+
+`app/features/items/service.py` を参考に、SQLや業務処理をfeatureのServiceへ寄せます。
+
+```text
+routes.py
+   ↓
+service.py
+   ↓
+SQLite
+```
+
+RouteへSQLや複雑なルールを詰め込みすぎない方がテストしやすくなります。
+
+## 7. 認可はSQLでも行う
 
 利用者本人だけが操作するデータなら所有者列を持たせます。
 
@@ -101,21 +159,9 @@ flowchart LR
 
 画面でボタンを隠すだけでは認可になりません。SELECT / UPDATE / DELETE自体を所有者条件で制限します。
 
-## 6. Serviceへ業務処理を分ける
+## 8. Route / API
 
-`app/services/items.py` を参考に、業務処理をServiceへ寄せます。
-
-```text
-items.py
-  list / create / get / toggle / delete
-        ↓
-equipment.py
-  list / create / get / update / delete / search
-```
-
-RouteへSQLや複雑なルールを詰め込みすぎない方がテストしやすくなります。
-
-## 7. URL / API
+Blueprintはfeature内で定義します。
 
 例:
 
@@ -127,74 +173,66 @@ POST /equipment/<id>/delete
 GET  /api/equipment
 ```
 
-更新リクエストには既存CSRF対策を維持します。APIでHTTPエラーを返す場合は既存のJSONエラーハンドラーを利用できます。
+更新処理では既存CSRFを維持します。APIのHTTPエラーは共通coreのJSONエラーハンドラーを利用できます。
 
-理由なくCORSを広く許可しません。
+## 9. Template / UI
 
-## 8. 画面
-
-主に変更する場所:
+feature固有Templateはfeature内へ置きます。
 
 ```text
-app/templates/
-app/static/app.css
-app/static/app.js
+app/features/equipment/templates/equipment/
 ```
 
-スマートフォン利用を想定する場合はPC幅だけでなくスマートフォン幅でも確認します。
+共通レイアウト `app/templates/base.html` を継承できます。
 
-## 9. 認証・認可
+共通静的処理は `app/static/` に残し、特定featureだけに必要な大きなCSS / JSは必要に応じてfeature側へ分けます。
 
-初期状態:
+## 10. 共通Health / Identity
 
-```mermaid
-flowchart TD
-    A["Request"] --> B{"loopback?"}
-    B -->|"Yes + Tailscale header"| T["Tailscale identity"]
-    B -->|"Yes + local"| L["Local owner"]
-    T --> U["users"]
-    L --> U
-    U --> P["アプリ内Authorization"]
-```
+以下は業務featureと分離された共通Routeです。
 
-用途に応じて管理者・共有データ・組織等を追加できますが、Tailscaleの到達制御とアプリ内認可は別に設計します。
+- `/` - core確認画面
+- `/healthz` - Webプロセス生存確認
+- `/readyz` - SQLite問い合わせ確認
+- `/api/me` - 現在利用者
 
-## 10. Health / Readiness
-
-共通基盤として以下を残します。
-
-- `/healthz`: Webプロセス生存確認
-- `/readyz`: SQLiteへの問い合わせ確認
-
-独自の必須外部資源が増えた場合は、必要に応じてreadinessへ追加します。ただし重い業務処理をhealth endpointへ入れません。
+items featureを削除してもこれらは残ります。
 
 ## 11. Backup / Restore
 
-実データを扱う前に共通ツールを試します。
+実データを扱う前に確認します。
 
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.db_tools backup
 .\.venv\Scripts\python.exe -m scripts.db_tools check
 ```
 
-Restore手順もテスト用DBで確認します。GitHubはSQLite実データのBackupではありません。
+Schema削除・大きなMigrationの前にはBackupを取得します。
 
-## 12. テストをアプリ仕様へ置き換える
+## 12. テストを分ける
 
-最低限:
+共通基盤テストは維持し、業務feature固有テストは名前で分かるようにします。
 
-- 正常登録
-- 一覧・詳細取得
-- 更新 / 削除
+初期sample:
+
+```text
+tests/test_sample_items.py
+```
+
+独自feature例:
+
+```text
+tests/test_equipment.py
+```
+
+少なくとも以下を確認します。
+
+- 正常登録・取得・更新・削除
 - 不正入力拒否
-- 未認証利用者拒否
 - CSRFなし更新拒否
-- 利用者Aが利用者Bのデータを取得・変更できない
-- Migrationが新規DBへ適用できる
-- Migration再実行が安全
-- `/readyz` が正常
-
-共通基盤のテストは理由なく削除しません。
+- 利用者Aが利用者Bのデータを操作できない
+- Migration適用 / 再実行
+- `/readyz`
 
 ## 13. 品質チェック
 
@@ -221,10 +259,12 @@ flowchart LR
 
 特別な理由がない限り、次を削除・弱体化しません。
 
+- `app/core/`
 - `app/auth.py`
 - `app/csrf.py`
 - `app/security.py`
-- `app/db.py` の接続 / Migration
+- `app/db.py`
+- `app/features/__init__.py`
 - `run.py` のlocalhost限定
 - `scripts/db_tools.py`
 - 品質ゲート / CI
@@ -233,20 +273,22 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A["要件 / データ項目"] --> B["Migration"]
-    B --> C["services"]
-    C --> D["routes / API"]
-    D --> E["templates / static"]
-    E --> F["tests"]
-    F --> G["scripts/check"]
-    G --> H["PR / CI"]
+    A["要件 / データ"] --> B["不要ならitems削除"]
+    B --> C["独自feature作成"]
+    C --> D["Migration"]
+    D --> E["Service / Route"]
+    E --> F["Template"]
+    F --> G["Tests"]
+    G --> H["scripts/check"]
+    H --> I["PR / CI"]
 ```
 
 ## 16. 完了条件
 
-- テンプレートのアプリ名・説明を置換した
-- 不要な `items` が残っていない
-- 独自データの所有・共有ルールが決まっている
+- アプリ名・説明を置換した
+- 不要な `app/features/items/` が残っていない
+- 独自featureが `app/features/<feature>/` にまとまっている
+- データ所有・共有ルールが決まっている
 - Migration方針がある
 - SQL / Serviceで認可している
 - `.env.example` が最新
@@ -257,4 +299,4 @@ flowchart TD
 
 ## 17. テンプレート本体へ追加しないもの
 
-特定業務だけで必要な画面、マスタ、通知、外部API、権限ロール等は、このテンプレートから作成した各アプリ側で実装します。共通テンプレートは小さく再利用しやすい基盤を維持します。
+特定業務だけで必要な画面、マスタ、通知、外部API、権限ロール等は、このテンプレートから作成した各アプリ側でfeatureとして実装します。共通テンプレートは小さく再利用しやすい基盤を維持します。
