@@ -37,9 +37,5 @@ def test_core_migration_is_applied_once_without_feature_migrations(monkeypatch, 
 
         db_module.apply_migrations()
 
-        count = (
-            db_module.get_db()
-            .execute("SELECT COUNT(*) FROM schema_migrations")
-            .fetchone()[0]
-        )
+        count = db_module.get_db().execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
         assert count == 1
