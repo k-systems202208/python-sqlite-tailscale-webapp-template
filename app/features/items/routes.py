@@ -1,4 +1,13 @@
-from flask import Blueprint, abort, g, jsonify, redirect, render_template, request, url_for
+from flask import (
+    Blueprint,
+    abort,
+    g,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 
 from app.core.access import require_user
 
@@ -30,7 +39,9 @@ def index():
 def add_item():
     try:
         create_item(
-            g.current_user["id"], request.form.get("title", ""), request.form.get("body", "")
+            g.current_user["id"],
+            request.form.get("title", ""),
+            request.form.get("body", ""),
         )
     except ValueError as exc:
         abort(400, description=str(exc))
@@ -64,7 +75,9 @@ def api_items():
 def api_create_item():
     payload = request.get_json(silent=True) or {}
     try:
-        row = create_item(g.current_user["id"], payload.get("title", ""), payload.get("body", ""))
+        row = create_item(
+            g.current_user["id"], payload.get("title", ""), payload.get("body", "")
+        )
     except ValueError as exc:
         abort(400, description=str(exc))
     return jsonify(_item_to_dict(row)), 201
