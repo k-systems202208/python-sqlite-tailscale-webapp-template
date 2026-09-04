@@ -1,30 +1,86 @@
 # SQLite Setup
 
-このテンプレートのデータは、別途DBサーバーを用意せず、ホストPC上のSQLiteへ保存します。
+このテンプレートのデータはホストPC上のSQLiteへ保存します。DBサーバーは不要です。Schema変更は番号付きMigration、保全は共通Backup / Restoreツールで扱います。
 
 ## 全体像
 
 ```mermaid
 flowchart LR
     F["Flask"] --> D["app/db.py"]
-    D --> S["app/schema.sql"]
+    D --> M["app/migrations/*.sql"]
     D --> DB[("data/app.db")]
-    DB --> B["Backup"]
+    DB --> B["scripts.db_tools"]
+    B --> BK[("backups/")]
 ```
 
 ## 1. 初回作成
 
-アプリ起動時に `app/schema.sql` が実行され、既定では `data/app.db` が作成されます。
+アプリ起動時に `app/db.py` が `app/migrations/` のSQLを番号順に確認し、未適用分だけ実行します。
+
+初期状態:
+
+```text
+app/migrations/
+└─ 001_initial.sql
+```
+
+既定DB:
 
 ```text
 data/app.db
 ```
 
-`data/` はGit管理対象外です。実データをGitHubへコミットしません。
+適用履歴:
 
-## 2. サンプルSchema
+```text
+schema_migrations
+  version
+  name
+  applied_at
+```
 
-初期状態では `users` と `items` を持ちます。
+`data/` はGit管理対象外です。
+
+## 2. Migrationの命名
+
+形式:
+
+```text
+NNN_name.sql
+```
+
+例:
+
+```text
+001_initial.sql
+002_add_category.sql
+003_add_audit_log.sql
+```
+
+Version番号は重複させません。Migration名を適用後に変更すると、コード側が不整合として検出します。
+
+## 3. Migrationの実行
+
+```mermaid
+flowchart TD
+    S["App start"] --> C["schema_migrations確認"]
+    C --> F{"version適用済み?"}
+    F -->|"Yes"| N["Skip"]
+    F -->|"No"| B["BEGIN IMMEDIATE"]
+    B --> Q["SQL実行"]
+    Q --> R["version記録"]
+    R --> M["COMMIT"]
+```
+
+Migration SQLと履歴登録は同じSQLite transaction内で処理します。途中で失敗した場合はMigrationを適用済みとして記録しません。
+
+## 4. 既存テンプレートDBからの移行
+
+旧版では `schema.sql` により `users` / `items` が既に作成されていました。現在の `001_initial.sql` は `CREATE TABLE IF NOT EXISTS` を使うため、旧Schemaを持つDBでも既存データを消さずに初回Migration履歴を登録できます。
+
+Migrationテストでは、この既存Schemaからのbaselineも確認しています。
+
+## 5. サンプルSchema
 
 ```mermaid
 erDiagram
@@ -48,34 +104,43 @@ erDiagram
     }
 ```
 
-`items.owner_user_id` は `users.id` を参照し、利用者ごとのデータ分離に使います。
+`items.owner_user_id` により利用者別データ分離を行います。
 
-## 3. 接続設定
+## 6. SQLite接続設定
 
-`app/db.py` はリクエスト単位でSQLite接続を管理し、次を有効にします。
+`app/db.py` はリクエスト単位に接続し、次を有効にします。
 
 - `PRAGMA foreign_keys = ON`
 - `PRAGMA journal_mode = WAL`
 - `sqlite3.Row`
 
-Routeや画面から直接DB接続を乱立させず、既存の `get_db()` を利用します。
+RouteやTemplateから独自に接続を作らず、共通 `get_db()` を使います。
 
-## 4. `schema.sql` の役割
+## 7. 新しいテーブル・列を追加する
 
-`app/schema.sql` は新規環境の初期構築用です。
+運用開始前でまだデータを持たない独自アプリ化の初期段階なら、`001_initial.sql` を自分の初期Schemaへ作り替えて構いません。
+
+実データを保存し始めた後は、既存Migrationを書き換えず追加します。
+
+```sql
+-- 002_add_category.sql
+ALTER TABLE items ADD COLUMN category TEXT NOT NULL DEFAULT '';
+CREATE INDEX idx_items_category ON items(category);
+```
 
 ```mermaid
 flowchart LR
-    A["新規環境"] --> S["schema.sql"]
-    S --> U["users"]
-    S --> I["items / 独自テーブル"]
+    C["Code change"] --> M["New migration"]
+    M --> T["Test DB"]
+    T --> B["Backup"]
+    B --> P["Production apply"]
 ```
 
-開発初期で実データがなければ、Schemaを大きく変更して構いません。運用開始後は既存DBを作り直すのではなく、移行手順を用意します。
+SQLiteのALTER TABLE制約で複雑な変更が必要な場合は、新テーブル作成 → データコピー → rename等のMigrationを用意します。
 
-## 5. 独自テーブルへ変更する
+## 8. 認可はSQLでも行う
 
-サンプル `items` を独自テーブルへ置き換える場合は、データ所有関係も同時に設計します。
+利用者本人だけが扱うデータなら、所有者列を持たせます。
 
 ```sql
 CREATE TABLE equipment (
@@ -86,84 +151,106 @@ CREATE TABLE equipment (
 );
 ```
 
-本人だけが扱うデータなら、ServiceのSQLで `owner_user_id` を条件に含めます。
+取得・更新・削除では `owner_user_id` を条件に含めます。画面上の非表示だけを認可として使いません。
 
-## 6. 認可はSQLでも行う
+## 9. Backup
 
-画面で他人のデータを非表示にするだけでは不十分です。
+共通ツールはSQLiteのbackup APIを使うため、単純なファイルコピーより整合性を保ちやすい方法です。
+
+Windows:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.db_tools backup
+```
+
+macOS / Linux:
+
+```bash
+.venv/bin/python -m scripts.db_tools backup
+```
+
+既定保存先:
+
+```text
+backups/app-YYYYMMDD-HHMMSS-ffffff.db
+```
+
+Backup作成後は自動で `PRAGMA quick_check` を実行します。`backups/` はGit管理対象外です。
+
+保存先を変更する場合:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.db_tools backup --backup-dir D:\SQLiteBackup
+```
+
+## 10. Integrity check
+
+現在DB:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.db_tools check
+```
+
+任意DB:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.db_tools check --database backups\app-....db
+```
+
+正常時は `SQLite quick_check: ok` を表示します。
+
+## 11. Restore
+
+**アプリを停止してから実行します。**
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.db_tools restore backups\app-....db --yes
+```
+
+既存 `data/app.db` がある場合は、置換前に自動で `pre-restore` Backupを作成します。
 
 ```mermaid
 flowchart LR
-    U["current_user.id"] --> Q{"owner_user_id一致?"}
-    Q -->|"Yes"| OK["SELECT / UPDATE / DELETE"]
-    Q -->|"No"| NG["対象なし"]
+    B["Selected backup"] --> C["quick_check"]
+    C --> S["Current DB safety backup"]
+    S --> R["Restore to temp DB"]
+    R --> V["quick_check"]
+    V --> A["Atomic replace"]
 ```
 
-サンプル実装は `app/services/items.py` で所有者条件を付けています。詳細は [AUTH-CRUD.md](AUTH-CRUD.md) を参照してください。
+`--yes` を付けないRestoreは拒否されます。
 
-## 7. 開発中のリセット
+## 12. Backup運用で決めること
 
-実データをまだ扱っていない開発初期なら、アプリ停止後に `data/app.db` を削除し、再起動して `schema.sql` から作り直す方法を使えます。
-
-**運用開始後のDBではこの方法を使わないでください。** データを失います。
-
-## 8. 運用開始後のSchema変更
-
-実データがある場合は次の流れを推奨します。
-
-```mermaid
-flowchart LR
-    A["Backup"] --> M["Migration準備"]
-    M --> T["テスト用DBで確認"]
-    T --> P["本番DBへ適用"]
-    P --> V["動作確認"]
-```
-
-小規模なら番号付きSQLと `schema_migrations` テーブルでも管理できます。変更が複雑になった場合はSQLAlchemy / Alembic等への移行を検討できます。
-
-## 9. バックアップ
-
-SQLiteの正本はホストPCです。GitHubはバックアップではありません。
-
-最低限、次を決めます。
-
-- 保存先
+- 外部保存先
 - 頻度
-- 世代数
-- 暗号化やアクセス権
-- 復元テスト
+- 保存世代数
+- 暗号化 / OSアクセス権
+- 端末故障時に残る場所か
+- Restoreテスト頻度
 
-書き込み中のDBファイルを単純コピーするより、SQLiteのbackup APIや整合性を保てる方法を利用することを推奨します。
+GitHubはSQLite実データのバックアップ先ではありません。
 
-## 10. 復元確認
-
-バックアップは「取得した」だけでは不十分です。定期的に別ファイルへ復元し、アプリから読み取れることを確認します。
-
-```mermaid
-flowchart LR
-    B["Backup"] --> R["Restore test"]
-    R --> A["App起動"]
-    A --> C["主要データ確認"]
-```
-
-## 11. SQLiteが向いている範囲
+## 13. SQLiteが向いている範囲
 
 このテンプレートは1台のホストPCで動く個人・家庭・小規模チーム向けです。
 
-次の要件が出てきたらPostgreSQL等のクライアント/サーバー型DBを検討します。
+構成見直しを検討する条件:
 
-- 複数サーバーから同一DBへ接続
+- 複数サーバーから同じDBへ接続
 - 高頻度な同時書き込み
-- 大規模公開サービス
+- インターネット一般公開
 - 高可用性 / DB冗長化
 
-SQLiteファイルをネットワーク共有へ置いて複数サーバーから直接扱う構成にはしません。
+その場合はSQLiteファイルを共有フォルダーへ置くのではなく、PostgreSQL等への移行を検討します。
 
-## 12. チェックリスト
+## 14. チェックリスト
 
-- `data/` がGit管理対象外である
-- `foreign_keys` が有効である
-- 独自テーブルの所有・共有ルールが決まっている
+- `data/` / `backups/` がGit管理対象外
+- 新Migrationは新しいversion番号
+- 適用済みMigrationを書き換えていない
+- DB変更テストがある
 - SQLで認可している
-- Schema変更前にバックアップしている
-- 復元手順を確認している
+- 本番反映前にBackupしている
+- `quick_check` が成功する
+- Restore手順を実際に確認している
