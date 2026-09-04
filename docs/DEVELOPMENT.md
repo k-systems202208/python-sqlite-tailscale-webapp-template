@@ -1,12 +1,13 @@
 # Development
 
-このドキュメントは、開発開始後の日常的なIssue・Branch・品質チェック・Pull Request・CI・依存関係更新を扱います。稼働PCへの反映は [DEPLOYMENT.md](DEPLOYMENT.md) を参照してください。
+このドキュメントは、開発開始後の日常的なIssue・Branch・doctor・品質チェック・Pull Request・CI・依存関係更新を扱います。稼働PCへの反映は [DEPLOYMENT.md](DEPLOYMENT.md)、運用は [OPERATIONS.md](OPERATIONS.md) を参照してください。
 
 ## 基本フロー
 
 ```mermaid
 flowchart LR
-    I["日本語Issue"] --> B["Issue番号入りBranch"]
+    I["日本語Issue"] --> D["doctor"]
+    D --> B["Issue番号入りBranch"]
     B --> W["実装 / docs / test"]
     W --> Q["scripts/check"]
     Q --> P["Commit / Push"]
@@ -28,17 +29,40 @@ flowchart LR
 
 詳細は [../CONTRIBUTING.md](../CONTRIBUTING.md) を参照してください。
 
+## Doctor
+
+依存関係導入前でもsystem Pythonから実行できます。
+
+```powershell
+python -m scripts.doctor
+```
+
+確認対象:
+
+- Python 3.11以上
+- Repository必須ファイル
+- `.venv`
+- `.env`
+- `APP_DATA_DIR`
+- Git / GitHub CLI / Tailscale command
+
+`.venv` / `.env` / optional commandが無い場合はWARNです。Python version不適合、必須ファイル欠落、data path異常はFAILとして終了コード1を返します。
+
+Doctorは「アプリが完全に設定済みか」ではなく「次に何が不足しているか」を初心者でも切り分けやすくするための診断です。
+
 ## 開発用セットアップ
 
 Windows:
 
 ```powershell
+python -m scripts.doctor
 .\scripts\bootstrap.ps1
 ```
 
 macOS / Linux:
 
 ```bash
+python3 -m scripts.doctor
 ./scripts/bootstrap.sh
 ```
 
@@ -62,13 +86,14 @@ macOS / Linux:
 
 ```mermaid
 flowchart LR
-    P["pip check"] --> L["Ruff lint"]
+    D["doctor"] --> P["pip check"]
+    P --> L["Ruff lint"]
     L --> F["Ruff format --check"]
     F --> T["pytest"]
     T --> C["Coverage >= 80%"]
 ```
 
-AIへ作業を依頼するときも、`scripts/check` 成功をローカル完了条件として扱います。
+AIへ作業を依頼するときも、doctorにFAILがなく `scripts/check` が成功することをローカル完了条件として扱います。
 
 ## CI
 
@@ -78,6 +103,7 @@ GitHub ActionsはPush / Pull Requestで次を確認します。
 - Python 3.12
 - Python 3.13
 - Python 3.14
+- `python -m scripts.doctor`
 - `pip check`
 - Ruff lint
 - Ruff format check
@@ -89,7 +115,7 @@ GitHub ActionsはPush / Pull Requestで次を確認します。
 
 ```mermaid
 flowchart TD
-    P["Push / PR"] --> Q["Common quality gate"]
+    P["Push / PR"] --> Q["doctor + quality gate"]
     Q --> P11["Python 3.11"]
     Q --> P12["Python 3.12"]
     Q --> P13["Python 3.13"]
@@ -97,13 +123,11 @@ flowchart TD
     P --> W["Windows PowerShell 5.1"]
 ```
 
-Ruleset定義では `test (3.11)`〜`test (3.14)` と `windows-powershell-51` をRequired Status Checkにします。
+Ruleset定義のRequired Status Check名は `test (3.11)`〜`test (3.14)` と `windows-powershell-51` のままです。doctorは既存Python job内へ追加するため、Ruleset名の変更は不要です。
 
 ## Ruff
 
 設定は `pyproject.toml` に集約しています。
-
-手動実行:
 
 ```bash
 python -m ruff check .
@@ -120,12 +144,9 @@ python -m ruff format .
 
 ## Coverage
 
-CIと `scripts/check` は次を対象にCoverageを取得します。
+CIと `scripts/check` は `app` と `scripts.db_tools` を対象にCoverageを取得し、最低80%を要求します。doctorは専用単体テスト `tests/test_doctor.py` で入力条件ごとの診断を確認します。
 
-- `app`
-- `scripts.db_tools`
-
-最低基準は80%です。新しい共通基盤を追加してCoverageが下がった場合、まず意味のあるテスト追加を優先します。
+新しい共通基盤をCoverage対象へ追加する場合、数値を満たすためだけのテストではなく意味のある分岐テストを優先します。
 
 ## 共通基盤とfeatureの開発境界
 
@@ -139,17 +160,19 @@ app/features/items/
 
 featureは自動検出されるため、独自featureを追加するたびに `app/__init__.py` へ個別importを増やしません。各featureの `register(app)` からBlueprintを登録します。
 
+新しいfeatureの配置、Route / Service、認可、Migration、テストの共通契約は [EXTENDING.md](EXTENDING.md) を参照してください。
+
 ## SQLite変更
 
 Migrationは用途によって置き場所を分けます。
 
-共通基盤のSchema変更:
+共通基盤:
 
 ```text
 app/migrations/*.sql
 ```
 
-feature固有のSchema変更:
+feature固有:
 
 ```text
 app/features/<feature>/migrations/*.sql
@@ -164,16 +187,7 @@ app/migrations/001_initial.sql
 app/features/items/migrations/002_sample_items.sql
 ```
 
-itemsサンプルを初回起動前に削除した場合は、`002` を独自Migrationで使用できます。一方、一度 `002_sample_items` を適用したDBではversion 2が履歴に残るため、featureを削除しても `002` を再利用せず、次の未使用番号を使います。
-
-例:
-
-```text
-003_equipment.sql
-004_add_equipment_category.sql
-```
-
-実データ運用開始後は適用済みMigrationを書き換えません。
+itemsサンプルを初回起動前に削除した場合は未適用versionを独自Migrationで利用できます。一方、一度適用したversionはfeature削除後も再利用しません。実データ運用開始後は適用済みMigrationを書き換えません。
 
 ```mermaid
 flowchart LR
@@ -181,6 +195,7 @@ flowchart LR
     M --> T["Tests"]
     T --> B["Backup"]
     B --> P["Deploy"]
+    P --> R["readyz / smoke test"]
 ```
 
 詳細は [SQLITE-SETUP.md](SQLITE-SETUP.md) を参照してください。
@@ -189,21 +204,15 @@ flowchart LR
 
 共通基盤テストは特定業務featureに依存させません。
 
-items固有テストは次へ集約しています。
-
 ```text
-tests/test_sample_items.py
+tests/test_sample_items.py       itemsサンプル
+tests/test_doctor.py             doctor
+tests/test_template_lifecycle.py 開発・運用・拡張契約
 ```
 
-items featureが存在しない場合、このファイルは自動skipされます。そのため `app/features/items/` を削除した状態でも、共通基盤の品質チェックとCIを維持できます。
+items featureが存在しない場合、sample testは自動skipされます。そのため `app/features/items/` を削除した状態でも共通基盤の品質チェックとCIを維持できます。
 
-独自featureを追加したら、そのfeatureの正常系だけでなく以下もテストします。
-
-- 不正入力
-- 他利用者データの参照・更新・削除拒否
-- CSRF
-- Migration適用 / 再実行
-- 既存データ互換性が必要な場合の移行
+独自featureを追加したら、正常系に加えて不正入力、他利用者データ操作拒否、CSRF、Migration適用 / 再実行、必要なデータ互換性を確認します。
 
 ## 依存関係
 
@@ -215,14 +224,7 @@ requirements-dev.txt   開発依存
 constraints.txt        CI確認済みの固定バージョン
 ```
 
-`constraints.txt` により同じCommitからのインストール再現性を高めています。
-
-Dependabotは月次で次を確認します。
-
-- pip
-- GitHub Actions
-
-Dependabot PRも通常のCIを通して取り込みます。major updateは変更点を確認し、機械的にMergeしません。
+Dependabotは月次でpipとGitHub Actionsを確認します。Dependabot PRも通常のCIを通し、major updateは変更点を確認してから取り込みます。
 
 ## Branch命名
 
@@ -254,6 +256,7 @@ chore/70-update-dependencies
 - 日本語Issueがある
 - BranchにIssue番号がある
 - PRとIssueが関連付いている
+- doctorにFAILがない
 - `scripts/check` または同等の品質確認が成功
 - GitHub Actionsが成功
 - `.env` / `data/` / `backups/` / 秘密情報が含まれていない
@@ -263,6 +266,10 @@ chore/70-update-dependencies
 - README / docsが最新
 - Squash Mergeを選択している
 
+## 運用への引き渡し
+
+Merge後に稼働PCへ反映する場合は [DEPLOYMENT.md](DEPLOYMENT.md) へ進み、反映後の日常確認・障害切り分け・Backup / Restore・Rollbackは [OPERATIONS.md](OPERATIONS.md) を基準にします。
+
 ## CI成功報告
 
 完了報告では次を併記します。
@@ -271,5 +278,3 @@ chore/70-update-dependencies
 2. 修正ドキュメント
 3. 修正・追加テスト
 4. CI結果
-
-Merge後に稼働PCへ反映する場合は [DEPLOYMENT.md](DEPLOYMENT.md) へ進みます。

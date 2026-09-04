@@ -10,6 +10,9 @@ if (-not (Test-Path -LiteralPath $python)) {
 
 Push-Location $repoRoot
 try {
+    & $python -m scripts.doctor
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
     & $python -m pip check
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

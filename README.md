@@ -8,13 +8,14 @@ localhost限定のFlask / Waitress、Tailscale利用者識別、SQLite Migration
 
 ```mermaid
 flowchart LR
-    A["Use this template / Clone"] --> B["bootstrap"]
+    A["Use this template / Clone"] --> D["doctor"]
+    D --> B["bootstrap"]
     B --> C["共通core確認"]
-    C --> D["必要ならitems sample確認"]
-    D --> E["独自featureへ置換"]
-    E --> Q["Ruff / pytest / Coverage"]
+    C --> S["必要ならitems sample確認"]
+    S --> E["独自featureへ置換 / 追加"]
+    E --> Q["doctor / Ruff / pytest / Coverage"]
     Q --> G["PR / CI"]
-    G --> H["Tailscale / 稼働PC"]
+    G --> H["Tailscale / 稼働PC / Operations"]
 ```
 
 ## 共通基盤とサンプル
@@ -26,9 +27,12 @@ flowchart LR
 - `app/db.py` - SQLite接続・Migration runner
 - `app/csrf.py` / `app/security.py` - Webセキュリティ
 - `app/features/__init__.py` - feature自動検出・登録
+- `scripts/doctor.py` - Python / Repository / env / data / optional tool診断
 - `scripts/` - bootstrap / check / DB tools / Tailscale / GitHub設定
 - `/`, `/healthz`, `/readyz`, `/api/me`
 - Ruff / pytest / Coverage / GitHub Actions CI
+- Backup / Restoreと運用Runbook
+- feature拡張の共通契約
 
 ### 丸ごと削除できるitemsサンプル
 
@@ -49,8 +53,9 @@ flowchart TD
     T --> S["Optional Sample"]
     C --> C1["Auth / Security"]
     C --> C2["SQLite / Migration"]
-    C --> C3["Tailscale / Backup"]
-    C --> C4["Quality / CI"]
+    C --> C3["Tailscale / Backup / Operations"]
+    C --> C4["Doctor / Quality / CI"]
+    C --> C5["Extension contract"]
     S --> S1["app/features/items/"]
 ```
 
@@ -75,13 +80,21 @@ flowchart TD
 
 新しいアプリを作る場合はGitHubの **Use this template** から自分用リポジトリを作成し、そのリポジトリをCloneする方法を推奨します。
 
+依存関係を入れる前に、system Pythonだけで構成を診断できます。
+
+```powershell
+python -m scripts.doctor
+```
+
 ### 開発PC
 
 Windows PowerShell:
 
 ```powershell
+python -m scripts.doctor
 .\scripts\bootstrap.ps1
 Copy-Item .env.example .env
+.\.venv\Scripts\python.exe -m scripts.doctor
 .\scripts\check.ps1
 .\scripts\start.ps1
 ```
@@ -89,11 +102,15 @@ Copy-Item .env.example .env
 macOS / Linux:
 
 ```bash
+python3 -m scripts.doctor
 ./scripts/bootstrap.sh
 cp .env.example .env
+.venv/bin/python -m scripts.doctor
 ./scripts/check.sh
 ./scripts/start.sh
 ```
+
+`doctor` はPython version、Repository必須ファイル、`.venv`、`.env`、`APP_DATA_DIR`、Git / GitHub CLI / Tailscale commandを確認します。開発前の `.venv` / `.env` 未作成やoptional command不足は警告に留め、致命的な構成不整合だけをFAILにします。
 
 ブラウザで以下を確認します。
 
@@ -132,11 +149,12 @@ http://127.0.0.1:8000/api/items
 flowchart LR
     A["app/features/"] --> D["自動検出"]
     D --> I["items/register(app)"]
-    D --> X["将来の独自feature"]
+    D --> X["独自feature/register(app)"]
     I --> F["Flask Blueprint"]
+    X --> F
 ```
 
-特定feature名を `app/__init__.py` にハードコードしないため、サンプル削除や独自feature追加を行いやすくしています。
+特定feature名を `app/__init__.py` にハードコードしないため、サンプル削除や独自feature追加を行いやすくしています。独自featureの設計契約は [docs/EXTENDING.md](docs/EXTENDING.md) を参照してください。
 
 ## SQLite Migration
 
@@ -171,7 +189,7 @@ app/features/items/migrations/002_sample_items.sql
 .\.venv\Scripts\python.exe -m scripts.db_tools restore backups\app-YYYYMMDD-HHMMSS-xxxxxx.db --yes
 ```
 
-Restore前には既存DBの `pre-restore` 安全バックアップを作成します。
+Restore前には既存DBの `pre-restore` safety backupを作成します。日常確認・障害切り分け・復旧の流れは [docs/OPERATIONS.md](docs/OPERATIONS.md) にまとめています。
 
 ## Tailscaleで別端末から使う
 
@@ -196,7 +214,7 @@ macOS / Linux:
 共通基盤:
 
 - `/` - 共通core確認画面
-- `/healthz` - プロセス生存確認
+- `/healthz` - Webプロセス生存確認
 - `/readyz` - SQLite readiness確認
 - `/api/me` - 現在の利用者情報
 
@@ -205,39 +223,37 @@ itemsサンプルを残した場合:
 - `/items` - 一覧・登録・完了切替・削除
 - `/api/items` - 利用者本人のitems JSON API
 
-## 品質チェック
+## 開発・品質コマンド
 
-Windows:
-
-```powershell
-.\scripts\check.ps1
-```
-
-macOS / Linux:
-
-```bash
-./scripts/check.sh
-```
+| コマンド | 内容 |
+| --- | --- |
+| `python -m scripts.doctor` | Python / Repository / env / data / optional tool診断 |
+| `.\scripts\bootstrap.ps1` / `./scripts/bootstrap.sh` | 開発用venvと依存関係を準備 |
+| `.\scripts\check.ps1` / `./scripts/check.sh` | doctor → pip check → Ruff → pytest + Coverage |
+| `.\scripts\start.ps1` / `./scripts/start.sh` | localhostでアプリ起動 |
 
 ```mermaid
 flowchart LR
-    A["pip check"] --> B["Ruff lint"]
+    D["doctor"] --> A["pip check"]
+    A --> B["Ruff lint"]
     B --> C["Ruff format --check"]
-    C --> D["pytest + coverage >= 80%"]
+    C --> T["pytest + coverage >= 80%"]
 ```
 
 itemsサンプルのテストは `tests/test_sample_items.py` に分離しています。共通基盤のテストはitems feature固有の仕様に依存しません。
 
 ## CI
 
-GitHub ActionsではPython 3.11 / 3.12 / 3.13 / 3.14、PowerShell / shell構文、Ruff、pytest + Coverage、Windows PowerShell 5.1を検証します。
+GitHub ActionsではPython 3.11 / 3.12 / 3.13 / 3.14の各jobでdoctor、PowerShell / shell構文、依存関係、Ruff、pytest + Coverageを確認し、別jobでWindows PowerShell 5.1のGitHub設定スモークテストを実行します。
+
+Required Check名は従来どおり `test (3.11)`〜`test (3.14)` と `windows-powershell-51` のため、今回のdoctor追加でRulesetのcheck名は変わりません。
 
 ## GitHub運用
 
 ```mermaid
 flowchart LR
     I["日本語Issue"] --> B["Issue番号入りBranch"]
-    B --> C["変更 / check"]
+    B --> C["doctor / check"]
     C --> P["Pull Request"]
     P --> CI["GitHub Actions"]
     CI --> M["Squash Merge"]
@@ -249,21 +265,22 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    A["GETTING-STARTED"] --> B["SQLITE-SETUP"]
-    B --> C["TAILSCALE-SETUP"]
-    C --> D["CUSTOMIZING"]
-    D --> E["DEVELOPMENT"]
-    E --> F["DEPLOYMENT"]
+    A["GETTING-STARTED"] --> B["SQLITE / TAILSCALE"]
+    B --> C["CUSTOMIZING / EXTENDING"]
+    C --> D["DEVELOPMENT / DEPLOYMENT"]
+    D --> E["OPERATIONS"]
 ```
 
-- [GETTING-STARTED.md](GETTING-STARTED.md) - 開発開始まで
-- [docs/CUSTOMIZING.md](docs/CUSTOMIZING.md) - itemsサンプルから独自featureへ作り替える手順
+- [GETTING-STARTED.md](GETTING-STARTED.md) - Cloneから開発開始まで
+- [docs/CUSTOMIZING.md](docs/CUSTOMIZING.md) - itemsサンプルから独自アプリへ作り替える手順
+- [docs/EXTENDING.md](docs/EXTENDING.md) - 独自feature追加時の共通契約
 - [docs/SQLITE-SETUP.md](docs/SQLITE-SETUP.md) - Migration / Backup / Restore
 - [docs/TAILSCALE-SETUP.md](docs/TAILSCALE-SETUP.md) - Tailscale Serve
 - [docs/AUTH-CRUD.md](docs/AUTH-CRUD.md) - 利用者識別・認可・CRUD
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - 構成と設計
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) - 日常開発・品質ゲート
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - 稼働PC反映
+- [docs/OPERATIONS.md](docs/OPERATIONS.md) - 日常確認・障害切り分け・Backup / Restore・Rollback
 - [docs/GITHUB-SETUP.md](docs/GITHUB-SETUP.md) - Ruleset / Merge設定
 - [docs/SECURITY.md](docs/SECURITY.md) - セキュリティ
 
@@ -274,6 +291,10 @@ flowchart LR
 - SQLでも所有者条件を付ける
 - `.env` / `data/` / `backups/` / 秘密鍵はGitHubへコミットしない
 - Tailscale Funnelを前提にしない
+
+## テンプレートとしての運用
+
+このリポジトリ自体には案件固有仕様を積み上げません。itemsは実装例として維持し、特定業務向け機能は各アプリの `app/features/<feature>/` に実装します。運用時は [docs/OPERATIONS.md](docs/OPERATIONS.md)、新feature追加時は [docs/EXTENDING.md](docs/EXTENDING.md) を基準にします。
 
 ## License
 

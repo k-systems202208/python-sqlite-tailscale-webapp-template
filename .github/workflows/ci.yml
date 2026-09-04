@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
@@ -73,6 +74,9 @@ jobs:
             requirements.txt
             requirements-dev.txt
             constraints.txt
+
+      - name: Diagnose template environment
+        run: python -m scripts.doctor
 
       - name: Install dependencies
         run: |
