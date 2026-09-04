@@ -2,6 +2,8 @@
 
 このドキュメントは、このテンプレートをCloneして動作確認し、そこから自分のWebアプリ開発を始めるための手順です。
 
+**Git / GitHub / GitHub Desktopの用語や、Branch → Commit → Push → Pull Request → CI → Mergeの流れがまだ分からない場合は、先に [BEGINNER-GUIDE.md](BEGINNER-GUIDE.md) を読んでください。**
+
 `app/features/items/` は利用者別CRUD・認可・feature Migrationを確認するための**丸ごと削除可能なサンプル**です。共通基盤とは分離されています。
 
 ## 全体フロー
@@ -79,6 +81,8 @@ gh auth login
 ```
 
 Pull Request必須、Python 3.11〜3.14とWindows PowerShell 5.1のRequired Check、Squash Merge等を設定します。詳細は [docs/GITHUB-SETUP.md](docs/GITHUB-SETUP.md) を参照してください。
+
+GitHub設定の意味より先にGit / GitHubの基本操作を理解したい場合は [BEGINNER-GUIDE.md](BEGINNER-GUIDE.md) を参照してください。
 
 ## 5. 開発環境を準備する
 
@@ -279,6 +283,8 @@ app/core、Auth、CSRF、Security、SQLite Migration、Backup、Tailscale、Doct
 完了条件は python -m scripts.doctor、scripts/check、GitHub Actions CI成功です。
 ```
 
+Git自体の操作や用語が分からない場合は [BEGINNER-GUIDE.md](BEGINNER-GUIDE.md) の「自分で編集する場合とChatGPT / Codexへ依頼する場合」を参照してください。
+
 ## 15. Gitフロー
 
 ```mermaid
@@ -290,6 +296,8 @@ flowchart LR
     R --> G["GitHub Actions CI"]
     G --> X["Squash Merge"]
 ```
+
+Git / GitHub未経験者向けの用語説明とGitHub Desktop操作は [BEGINNER-GUIDE.md](BEGINNER-GUIDE.md) にまとめています。
 
 ## 16. デプロイ後の運用
 
