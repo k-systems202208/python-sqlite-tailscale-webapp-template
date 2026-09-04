@@ -11,6 +11,7 @@ if [ ! -x "$PYTHON" ]; then
 fi
 
 cd "$REPO_ROOT"
+"$PYTHON" -m scripts.doctor
 "$PYTHON" -m pip check
 "$PYTHON" -m ruff check .
 "$PYTHON" -m ruff format --check .
