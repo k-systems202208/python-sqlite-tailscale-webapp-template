@@ -47,6 +47,19 @@ def test_beginner_guide_explains_the_full_github_desktop_workflow():
     assert "ChatGPT / Codex" in beginner
 
 
+def test_sampleless_smoke_test_protects_the_reusable_common_core():
+    ci = read(".github/workflows/ci.yml")
+    smoke_test = read("docs/TEMPLATE-SMOKE-TEST.md")
+
+    assert "Sampleless template smoke test" in ci
+    assert "rm -rf app/features/items" in ci
+    assert "--cov-fail-under=80" in ci
+    assert "Use this template" in smoke_test
+    assert "app/features/items/" in smoke_test
+    assert "scripts/check" in smoke_test
+    assert "Pull Request" in smoke_test
+
+
 def test_main_guides_link_beginner_guidance_and_lifecycle_docs():
     readme = read("README.md")
     getting_started = read("GETTING-STARTED.md")
@@ -60,3 +73,5 @@ def test_main_guides_link_beginner_guidance_and_lifecycle_docs():
     assert "python -m scripts.doctor" in readme
     assert "docs/OPERATIONS.md" in readme
     assert "docs/EXTENDING.md" in readme
+    assert "docs/TEMPLATE-SMOKE-TEST.md" in readme
+    assert "TEMPLATE-SMOKE-TEST.md" in development
