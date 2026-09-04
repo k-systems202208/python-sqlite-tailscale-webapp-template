@@ -18,9 +18,8 @@ fi
 cd "$REPO_ROOT"
 "$PYTHON" -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/python -m pip install -r requirements.txt
 
-echo "Development bootstrap complete."
+echo "Runtime bootstrap complete."
 echo "Next: cp .env.example .env"
-echo "Then: ./scripts/check.sh"
 echo "Then: ./scripts/start.sh"

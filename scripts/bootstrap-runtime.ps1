@@ -16,13 +16,12 @@ Push-Location $repoRoot
 try {
     python -m venv .venv
     & .\.venv\Scripts\python.exe -m pip install --upgrade pip
-    & .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+    & .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 }
 finally {
     Pop-Location
 }
 
-Write-Host "Development bootstrap complete."
+Write-Host "Runtime bootstrap complete."
 Write-Host "Next: Copy-Item .env.example .env"
-Write-Host "Then: .\scripts\check.ps1"
 Write-Host "Then: .\scripts\start.ps1"

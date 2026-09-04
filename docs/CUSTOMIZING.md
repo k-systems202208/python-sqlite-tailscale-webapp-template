@@ -2,7 +2,7 @@
 
 このテンプレートは特定業務向けの完成アプリではなく、Python / Flask + SQLite + Tailscale を使ったクローズドWebアプリ開発の共通土台です。
 
-`items` は認証・認可・CRUD・SQLiteの実装方法を確認するためのサンプルです。新しいアプリでは自由に削除・置換してください。
+`items` は認証・認可・CRUD・Migrationの実装例です。新しいアプリでは自由に削除・置換してください。
 
 ## カスタマイズの全体像
 
@@ -10,81 +10,58 @@
 flowchart TD
     T["共通テンプレート"] --> K["残す共通基盤"]
     T --> C["案件ごとに変更"]
-
     K --> K1["Flask / Waitress"]
     K --> K2["localhost / Tailscale"]
-    K --> K3["認証 / 認可 / CSRF"]
-    K --> K4["SQLite接続 / CI"]
-
+    K --> K3["Auth / CSRF / Security"]
+    K --> K4["Migration / Backup / CI"]
     C --> C1["アプリ名 / UI"]
     C --> C2["itemsサンプル"]
-    C --> C3["Schema / Service / Route"]
-    C --> C4["テスト / 環境設定"]
+    C --> C3["Migration / Service / Route"]
+    C --> C4["業務テスト"]
 ```
 
 ## 1. 最初に決めること
 
-実装を始める前に最低限以下を決めます。
-
-- アプリ名
-- 目的
+- アプリ名・目的
 - 主な利用者
 - 保存するデータ
-- 利用者ごとに分離するデータ / 共有するデータ
-- 誰が登録・更新・削除できるか
-- スマートフォンから使うか
+- 利用者別 / 共有データ
+- 登録・更新・削除権限
 - 稼働PC
-- バックアップ方法
+- Tailscale利用範囲
+- Backup保存先・頻度
 
-```mermaid
-flowchart LR
-    A["目的 / 利用者"] --> B["データ設計"]
-    B --> C["認証 / 認可"]
-    C --> D["画面 / API"]
-    D --> E["運用 / Backup"]
-```
+## 2. 環境設定
 
-## 2. アプリ名・環境設定を変更する
-
-`.env` の `APP_NAME`、ローカル利用者の設定を自分のアプリに合わせます。
+`.env` を自分のアプリへ変更します。
 
 ```env
 APP_NAME=家庭用在庫管理
+LOG_LEVEL=INFO
 LOCAL_OWNER_EMAIL=owner@example.com
 LOCAL_OWNER_NAME=山田太郎
 ```
 
-アプリ独自の環境変数を追加した場合は `.env.example` に変数名とダミー値だけを追記します。秘密情報の実値は書きません。
+アプリ独自の環境変数を追加した場合は `.env.example` にダミー値と説明を追加します。秘密情報の実値は書きません。
 
-READMEも自分のアプリの目的・起動方法・運用方法へ更新してください。
-
-## 3. `items` サンプルを使わない場合
-
-主なサンプル実装は次です。
+## 3. `items` サンプルの範囲
 
 ```text
-app/schema.sql            itemsテーブル
-app/services/items.py     CRUD
-app/routes.py              items画面 / API
-app/templates/             画面
-app/static/                CSS / JavaScript
-tests/                     サンプル仕様のテスト
+app/migrations/001_initial.sql   users / items初期Schema
+app/services/items.py            items CRUD
+app/routes.py                    items画面 / API
+app/templates/                   サンプル画面
+app/static/                      CSS / JavaScript
+tests/                           サンプル仕様と共通基盤テスト
 ```
 
-```mermaid
-flowchart TD
-    I["itemsサンプル"] --> S["schema.sql"]
-    I --> SV["services/items.py"]
-    I --> R["routes.py"]
-    I --> UI["templates / static"]
-    I --> T["tests"]
-```
+サンプルを削除する場合も、認証・CSRF・Migration・Backup・品質ゲートなどの共通基盤は維持します。
 
-不要なサンプルを削除した場合は、関連するテストとドキュメントも同時に更新します。
+## 4. 独自Schemaへ変更する
 
-## 4. 独自テーブルへ置き換える
+### まだ実データを使っていない新規アプリ
 
-`app/schema.sql` の `items` を参考に、アプリ固有のテーブルを設計します。
+テンプレートから作った直後であれば `001_initial.sql` を独自アプリの初期Schemaへ編集できます。
 
 例:
 
@@ -100,7 +77,21 @@ CREATE TABLE equipment (
 );
 ```
 
-利用者本人だけが操作するデータなら、`owner_user_id` のような所有者列を持たせ、取得・更新・削除SQLで必ず所有者条件を使います。
+### 実データ運用開始後
+
+適用済みMigrationを書き換えず、新しい番号を追加します。
+
+```text
+001_initial.sql
+002_add_equipment_category.sql
+003_add_equipment_index.sql
+```
+
+詳細は [SQLITE-SETUP.md](SQLITE-SETUP.md) を参照してください。
+
+## 5. 認可はSQLでも行う
+
+利用者本人だけが操作するデータなら所有者列を持たせます。
 
 ```mermaid
 flowchart LR
@@ -108,25 +99,23 @@ flowchart LR
     Q --> OK["本人のデータのみ"]
 ```
 
-SQLiteの変更・バックアップ方針は [SQLITE-SETUP.md](SQLITE-SETUP.md) を参照してください。
+画面でボタンを隠すだけでは認可になりません。SELECT / UPDATE / DELETE自体を所有者条件で制限します。
 
-## 5. 業務処理をServiceへ分ける
+## 6. Serviceへ業務処理を分ける
 
-現在の `app/services/items.py` がサンプルです。
+`app/services/items.py` を参考に、業務処理をServiceへ寄せます。
 
 ```text
 items.py
   list / create / get / toggle / delete
         ↓
 equipment.py
-  list / create / get / update / delete / search ...
+  list / create / get / update / delete / search
 ```
 
-RouteへSQLや複雑な業務ルールを詰め込みすぎず、Service層へ寄せるとテストしやすくなります。
+RouteへSQLや複雑なルールを詰め込みすぎない方がテストしやすくなります。
 
-## 6. URL / APIを変更する
-
-`app/routes.py` に自分の画面・APIを追加します。
+## 7. URL / API
 
 例:
 
@@ -138,13 +127,13 @@ POST /equipment/<id>/delete
 GET  /api/equipment
 ```
 
-更新リクエストには既存のCSRF対策を維持します。JavaScriptから更新APIを呼ぶ場合もCSRFトークンを送信します。
+更新リクエストには既存CSRF対策を維持します。APIでHTTPエラーを返す場合は既存のJSONエラーハンドラーを利用できます。
 
-理由なくCORSを広く許可しないでください。
+理由なくCORSを広く許可しません。
 
-## 7. 画面を変更する
+## 8. 画面
 
-主に次を変更します。
+主に変更する場所:
 
 ```text
 app/templates/
@@ -152,20 +141,11 @@ app/static/app.css
 app/static/app.js
 ```
 
-最初は一覧・登録など最小限の画面から始め、検索・絞り込み・管理画面は段階的に追加します。
-
-```mermaid
-flowchart LR
-    M["最小画面"] --> C["CRUD確認"]
-    C --> S["検索 / 絞り込み"]
-    S --> A["管理機能"]
-```
-
 スマートフォン利用を想定する場合はPC幅だけでなくスマートフォン幅でも確認します。
 
-## 8. 認証・認可をカスタマイズする
+## 9. 認証・認可
 
-初期状態では、localhostでは `.env` のローカルオーナー、Tailscale Serve経由ではTailscale利用者を識別します。
+初期状態:
 
 ```mermaid
 flowchart TD
@@ -174,26 +154,34 @@ flowchart TD
     B -->|"Yes + local"| L["Local owner"]
     T --> U["users"]
     L --> U
-    U --> P["アプリ内の認可"]
+    U --> P["アプリ内Authorization"]
 ```
 
-用途に応じて次を追加できます。
+用途に応じて管理者・共有データ・組織等を追加できますが、Tailscaleの到達制御とアプリ内認可は別に設計します。
 
-- 管理者 / 一般利用者
-- 共有データ
-- 組織 / グループ
-- オーナーフラグ
-- 操作履歴
+## 10. Health / Readiness
 
-Tailscaleは「アプリへ到達できる人」を制限します。アプリ内で「何を操作できるか」はFlask / SQLite側で判定します。
+共通基盤として以下を残します。
 
-詳細は [AUTH-CRUD.md](AUTH-CRUD.md) と [SECURITY.md](SECURITY.md) を参照してください。
+- `/healthz`: Webプロセス生存確認
+- `/readyz`: SQLiteへの問い合わせ確認
 
-## 9. テストをアプリ仕様へ置き換える
+独自の必須外部資源が増えた場合は、必要に応じてreadinessへ追加します。ただし重い業務処理をhealth endpointへ入れません。
 
-サンプルを削除したら、サンプル固有テストも削除・変更し、独自アプリの重要仕様へ置き換えます。
+## 11. Backup / Restore
 
-最低限、次を推奨します。
+実データを扱う前に共通ツールを試します。
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.db_tools backup
+.\.venv\Scripts\python.exe -m scripts.db_tools check
+```
+
+Restore手順もテスト用DBで確認します。GitHubはSQLite実データのBackupではありません。
+
+## 12. テストをアプリ仕様へ置き換える
+
+最低限:
 
 - 正常登録
 - 一覧・詳細取得
@@ -202,66 +190,71 @@ Tailscaleは「アプリへ到達できる人」を制限します。アプリ�
 - 未認証利用者拒否
 - CSRFなし更新拒否
 - 利用者Aが利用者Bのデータを取得・変更できない
-- `127.0.0.1` 以外へのbindを許可しない
+- Migrationが新規DBへ適用できる
+- Migration再実行が安全
+- `/readyz` が正常
 
-## 10. 共通基盤を変更するときの注意
+共通基盤のテストは理由なく削除しません。
 
-特別な理由がない限り、次の役割を削除・弱体化しないことを推奨します。
+## 13. 品質チェック
 
-- `app/auth.py` - 安全な利用者識別
-- `app/csrf.py` - 更新リクエスト保護
-- `app/security.py` - セキュリティヘッダー
-- `app/db.py` - SQLite接続管理
-- `run.py` - localhost限定の起動
+Windows:
+
+```powershell
+.\scripts\check.ps1
+```
+
+macOS / Linux:
+
+```bash
+./scripts/check.sh
+```
 
 ```mermaid
 flowchart LR
-    N["Network"] --> A["Authentication / Authorization"]
-    A --> C["CSRF / Security headers"]
-    C --> D["SQLite owner check"]
+    A["変更"] --> L["Ruff"]
+    L --> T["pytest + Coverage"]
+    T --> P["PR / CI"]
 ```
 
-## 11. 実データを扱う前にバックアップを決める
+## 14. 共通基盤を変更するときの注意
 
-実データは通常 `data/app.db` に保存されます。
+特別な理由がない限り、次を削除・弱体化しません。
 
-最低限、次を決めます。
+- `app/auth.py`
+- `app/csrf.py`
+- `app/security.py`
+- `app/db.py` の接続 / Migration
+- `run.py` のlocalhost限定
+- `scripts/db_tools.py`
+- 品質ゲート / CI
 
-- バックアップ先
-- バックアップ頻度
-- 保存世代数
-- 復元手順
-- Schema変更前のバックアップ
-
-GitHubはSQLite実データのバックアップ先ではありません。
-
-## 12. 推奨カスタマイズ順序
+## 15. 推奨カスタマイズ順序
 
 ```mermaid
 flowchart TD
-    A["要件 / データ項目"] --> B["schema.sql"]
+    A["要件 / データ項目"] --> B["Migration"]
     B --> C["services"]
     C --> D["routes / API"]
     D --> E["templates / static"]
     E --> F["tests"]
-    F --> G["pytest"]
+    F --> G["scripts/check"]
     G --> H["PR / CI"]
 ```
 
-## 13. カスタマイズ後の完了条件
+## 16. 完了条件
 
-- アプリ名・説明がテンプレートのまま残っていない
-- 不要な `items` サンプルが残っていない
-- 独自データの所有・共有ルールが定義されている
+- テンプレートのアプリ名・説明を置換した
+- 不要な `items` が残っていない
+- 独自データの所有・共有ルールが決まっている
+- Migration方針がある
 - SQL / Serviceで認可している
 - `.env.example` が最新
+- Backup / Restore方法を確認した
+- `scripts/check` が成功
+- GitHub Actions CIが成功
 - README / docsが独自アプリ用に更新されている
-- pytestが成功する
-- GitHub Actions CIが成功する
-- 稼働PCへの反映方法とバックアップ方法が決まっている
 
-## 14. テンプレート本体へ追加しないもの
+## 17. テンプレート本体へ追加しないもの
 
-このテンプレート本体へ追加するのは、複数のローカルWebアプリで再利用価値がある共通基盤・安全策・開発手順を基本とします。
-
-特定業務だけで必要な画面、マスタ、外部API、権限ロール、通知などは、テンプレートから作成した各アプリ側で実装します。
+特定業務だけで必要な画面、マスタ、通知、外部API、権限ロール等は、このテンプレートから作成した各アプリ側で実装します。共通テンプレートは小さく再利用しやすい基盤を維持します。

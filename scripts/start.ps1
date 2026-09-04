@@ -1,5 +1,18 @@
 $ErrorActionPreference = "Stop"
-if (-not (Test-Path .\.venv\Scripts\python.exe)) {
-    throw "Virtual environment not found. Run .\\scripts\\bootstrap.ps1 first."
+
+$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repoRoot = Split-Path -Parent $scriptRoot
+$python = Join-Path $repoRoot ".venv\Scripts\python.exe"
+
+if (-not (Test-Path -LiteralPath $python)) {
+    throw "Virtual environment not found. Run .\scripts\bootstrap.ps1 first."
 }
-& .\.venv\Scripts\python.exe run.py
+
+Push-Location $repoRoot
+try {
+    & $python run.py
+    exit $LASTEXITCODE
+}
+finally {
+    Pop-Location
+}

@@ -4,46 +4,31 @@
 
 ## 必須ルール
 
-変更の大小にかかわらず、次のルールを守ります。
-
 1. **mainへの直接Commit / Pushは禁止します。**
-2. **mainへ取り込む変更単位ごとにIssueを作成します。**
-3. **Issueのタイトル・本文は日本語で記載します。**
-4. Issueに対応する作業ブランチを作成します。
-5. **ブランチ名にはIssue番号を含めます。**
-6. 作業ブランチで変更・テスト・Commit / Pushします。
-7. **必ずPull Requestを作成します。**
-8. PR本文からIssueを `Closes #番号` で関連付けます。
-9. CI成功と差分を確認してからmainへ取り込みます。
-10. **mainへの取り込みは原則Squash Mergeとします。**
-11. Merge後は対応IssueをCloseし、作業ブランチを削除します。
-12. READMEや関連docsへの影響がある場合は同じPRで最新化します。
-
-READMEの誤字、コメント、軽微な文言変更、ドキュメントだけの変更も例外ではありません。
+2. **mainへ取り込む変更単位ごとに日本語Issueを作成します。**
+3. Issueに対応するIssue番号入り作業ブランチを作成します。
+4. 作業ブランチで変更・テスト・Commit / Pushします。
+5. **必ずPull Requestを作成します。**
+6. PR本文からIssueを関連付けます。
+7. 品質チェック、CI、差分を確認してからmainへ取り込みます。
+8. **原則Squash Merge**とします。
+9. README / docsへの影響は同じPRで最新化します。
 
 ```mermaid
 flowchart LR
     I["日本語Issue"] --> B["Issue番号入りBranch"]
     B --> W["実装 / docs / test"]
-    W --> C["Commit / Push"]
-    C --> P["Pull Request"]
-    P --> CI["GitHub Actions CI"]
+    W --> Q["scripts/check"]
+    Q --> P["Pull Request"]
+    P --> CI["GitHub Actions"]
     CI --> M["Squash Merge"]
-    M --> X["Issue Close / Branch delete"]
 ```
 
 ## Issue
 
-Issueは変更理由と完了条件を残す作業票です。原則として **1 Issue = 1 PR** とします。
+原則 **1 Issue = 1 PR** です。本文では最低限、目的・対応内容・影響範囲・完了条件を明確にします。
 
-本文では最低限、次を明確にします。
-
-- 目的
-- 対応内容
-- 影響範囲
-- 完了条件
-
-## ブランチ命名規則
+## ブランチ命名
 
 ```text
 feat/12-inventory-search
@@ -56,64 +41,100 @@ chore/70-update-dependencies
 
 ## Pull Request
 
-PR作成時は `.github/pull_request_template.md` を利用し、対応Issue、変更内容、テスト、影響範囲、DB・設定・セキュリティ影響、ドキュメント更新状況を記載します。
+`.github/pull_request_template.md` を利用し、以下を確認します。
+
+- 対応Issue
+- 変更内容
+- テスト
+- 影響範囲
+- Migration / DB影響
+- `.env.example` 変更
+- requirements / constraints変更
+- 認証・セキュリティ影響
+- README / docs更新
+
+通常は:
 
 ```text
 Closes #123
 ```
 
-## Squash Merge
+を利用します。Merge後の手動確認が完了条件として残る場合は、Issueを完了確認までOpenに保つ運用も可能です。
 
-作業ブランチに複数Commitがあっても、mainへはPR単位の1Commitとして取り込みます。
+## ローカル品質チェック
 
-```mermaid
-flowchart TD
-    B["Working branch"] --> C1["feat commit"]
-    B --> C2["test commit"]
-    B --> C3["docs commit"]
-    C1 --> S["Squash Merge"]
-    C2 --> S
-    C3 --> S
-    S --> M["main: 1 PR = 1 commit"]
-```
-
-## Merge前チェック
-
-- 対応する日本語Issueがある
-- ブランチ名にIssue番号が含まれている
-- PRとIssueが関連付いている
-- mainへの直接Commitではない
-- 意図しないファイル変更がない
-- `.env` / `data/` / SQLite実データ / 秘密情報が含まれていない
-- 必要なテストが追加・更新されている
-- CIが成功している
-- 認証・認可を弱めていない
-- 他利用者のデータへアクセスできる変更になっていない
-- `0.0.0.0` へのbind変更がない
-- CSRF / セキュリティヘッダーを壊していない
-- DB変更時は既存データへの影響を確認した
-- README / docsが最新になっている
-- Squash Mergeを選択している
-
-## テスト
+開発用bootstrap後、個別pytestではなく共通checkを推奨します。
 
 Windows:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest
+.\scripts\check.ps1
 ```
 
 macOS / Linux:
 
 ```bash
-.venv/bin/python -m pytest
+./scripts/check.sh
 ```
 
-共通基盤を変更した場合は、localhost制約、利用者識別、利用者間データ分離、CSRF、セキュリティヘッダーも確認します。
+実行内容:
+
+- `pip check`
+- Ruff lint
+- Ruff format check
+- pytest
+- Coverage 80%以上
+
+## CI
+
+GitHub Actionsは次を検証します。
+
+- Python 3.11 / 3.12 / 3.13 / 3.14
+- Ruff lint / format
+- pytest + Coverage
+- 全PowerShell / shellスクリプト構文
+- Windows PowerShell 5.1スモーク
+
+CI失敗中はMergeしません。
+
+## Migration変更
+
+運用開始後のSchema変更は `app/migrations/` に新しい番号付きSQLを追加します。
+
+```text
+001_initial.sql
+002_add_feature.sql
+```
+
+適用済みMigrationを書き換えません。DB変更PRではMigrationテスト、既存データ影響、Backup / Rollbackを確認します。
+
+## 依存関係変更
+
+- `requirements.txt`: runtime直接依存範囲
+- `requirements-dev.txt`: 開発依存
+- `constraints.txt`: CI確認済み固定バージョン
+
+依存更新時は必要なファイルを同じPRで揃えます。Dependabot PRも通常CIを通して判断します。
+
+## Merge前チェック
+
+- 日本語Issueがある
+- ブランチ名にIssue番号がある
+- mainへの直接変更ではない
+- `scripts/check` または同等の品質確認が成功
+- GitHub Actions CIが成功
+- `.env` / `data/` / `backups/` / SQLite実データ / 秘密情報が含まれていない
+- 必要なテストがある
+- Migrationの既存データ影響を確認した
+- 認証・認可を弱めていない
+- `0.0.0.0` へbindしていない
+- CSRF / セキュリティヘッダーを壊していない
+- README / docsが最新
+- Squash Mergeを選択している
 
 ## CI成功報告
 
-CI成功をもって作業完了と報告する場合、最低限次を併記します。
+完了報告では最低限次を併記します。
 
 - 修正ソース一覧
 - 修正ドキュメント一覧
@@ -125,6 +146,7 @@ CI成功をもって作業完了と報告する場合、最低限次を併記し
 ```text
 .env
 data/
+backups/
 SQLiteデータベースファイル
 生成された秘密鍵
 個人・組織固有のtailnet情報
@@ -133,24 +155,15 @@ SQLiteデータベースファイル
 
 ## テンプレート本体へ追加するもの
 
-このリポジトリは、誰でも自分用アプリへ流用できる小さな共通テンプレートであることを重視します。
-
-テンプレート本体へ追加するのは、複数のローカルWebアプリで再利用価値があるものを基本とします。
-
-- 共通の安全策
-- 開発・CI改善
-- セットアップ改善
-- 汎用的なサンプル
-- ドキュメント改善
-
-特定会社・特定業務だけで必要な機能は、このテンプレートから作成した各アプリ側で実装します。
+複数のローカルWebアプリで再利用価値がある共通基盤・安全策・品質改善を基本とします。特定会社・特定業務だけで必要な機能は、このテンプレートから作成した各アプリ側で実装します。
 
 ## 関連ドキュメント
 
-- [GETTING-STARTED.md](GETTING-STARTED.md) - 初めて利用する手順
-- [docs/CUSTOMIZING.md](docs/CUSTOMIZING.md) - 独自アプリへの置き換え
-- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) - Issue / Branch / PR / CI
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - 稼働PCへの反映
-- [docs/GITHUB-SETUP.md](docs/GITHUB-SETUP.md) - main保護・Ruleset
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - 構成
-- [docs/SECURITY.md](docs/SECURITY.md) - セキュリティ
+- [GETTING-STARTED.md](GETTING-STARTED.md)
+- [docs/CUSTOMIZING.md](docs/CUSTOMIZING.md)
+- [docs/SQLITE-SETUP.md](docs/SQLITE-SETUP.md)
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- [docs/GITHUB-SETUP.md](docs/GITHUB-SETUP.md)
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- [docs/SECURITY.md](docs/SECURITY.md)

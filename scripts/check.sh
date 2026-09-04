@@ -11,4 +11,7 @@ if [ ! -x "$PYTHON" ]; then
 fi
 
 cd "$REPO_ROOT"
-exec "$PYTHON" run.py
+"$PYTHON" -m pip check
+"$PYTHON" -m ruff check .
+"$PYTHON" -m ruff format --check .
+"$PYTHON" -m pytest --cov=app --cov=scripts.db_tools --cov-report=term-missing --cov-fail-under=80

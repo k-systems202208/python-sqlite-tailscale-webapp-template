@@ -1,7 +1,20 @@
+import sqlite3
 from functools import wraps
 
-from flask import Blueprint, abort, current_app, g, jsonify, redirect, render_template, request, url_for
+from flask import (
+    Blueprint,
+    abort,
+    current_app,
+    g,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
+from werkzeug.exceptions import HTTPException
 
+from .db import get_db
 from .services.items import create_item, delete_item, list_items, toggle_item
 
 bp = Blueprint("main", __name__)
@@ -13,6 +26,7 @@ def require_user(view):
         if g.current_user is None:
             abort(401)
         return view(*args, **kwargs)
+
     return wrapped
 
 
@@ -32,6 +46,16 @@ def healthz():
     return jsonify({"status": "ok", "app": current_app.config["APP_NAME"]})
 
 
+@bp.get("/readyz")
+def readyz():
+    try:
+        get_db().execute("SELECT 1").fetchone()
+    except sqlite3.Error:
+        current_app.logger.exception("SQLite readiness check failed")
+        return jsonify({"status": "not_ready", "database": "error"}), 503
+    return jsonify({"status": "ready", "database": "ok"})
+
+
 @bp.get("/")
 @require_user
 def index():
@@ -43,7 +67,9 @@ def index():
 @require_user
 def add_item():
     try:
-        create_item(g.current_user["id"], request.form.get("title", ""), request.form.get("body", ""))
+        create_item(
+            g.current_user["id"], request.form.get("title", ""), request.form.get("body", "")
+        )
     except ValueError as exc:
         abort(400, description=str(exc))
     return redirect(url_for("main.index"))
@@ -68,11 +94,13 @@ def delete(item_id: int):
 @bp.get("/api/me")
 @require_user
 def api_me():
-    return jsonify({
-        "login": g.current_user["login"],
-        "display_name": g.current_user["display_name"],
-        "source": g.current_user["identity_source"],
-    })
+    return jsonify(
+        {
+            "login": g.current_user["login"],
+            "display_name": g.current_user["display_name"],
+            "source": g.current_user["identity_source"],
+        }
+    )
 
 
 @bp.get("/api/items")
@@ -88,12 +116,14 @@ def api_create_item():
     try:
         row = create_item(g.current_user["id"], payload.get("title", ""), payload.get("body", ""))
     except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
+        abort(400, description=str(exc))
     return jsonify(_item_to_dict(row)), 201
 
 
-@bp.app_errorhandler(401)
-def unauthorized(_error):
+@bp.app_errorhandler(HTTPException)
+def http_error(error: HTTPException):
     if request.path.startswith("/api/"):
-        return jsonify({"error": "authentication required"}), 401
-    return render_template("unauthorized.html"), 401
+        return jsonify({"error": error.description, "status": error.code}), error.code
+    if error.code == 401:
+        return render_template("unauthorized.html"), 401
+    return error
