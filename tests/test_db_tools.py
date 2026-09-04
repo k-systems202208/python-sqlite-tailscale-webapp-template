@@ -19,6 +19,12 @@ def _note_count(path: Path) -> int:
         return connection.execute("SELECT COUNT(*) FROM notes").fetchone()[0]
 
 
+def test_default_database_path_uses_app_data_dir(tmp_path, monkeypatch):
+    custom_data_dir = tmp_path / "custom-data"
+    monkeypatch.setenv("APP_DATA_DIR", str(custom_data_dir))
+    assert db_tools.default_database_path() == custom_data_dir / "app.db"
+
+
 def test_backup_check_and_restore(tmp_path):
     database = tmp_path / "app.db"
     backup_dir = tmp_path / "backups"
@@ -38,6 +44,20 @@ def test_backup_check_and_restore(tmp_path):
     assert _note_count(safety) == 2
     assert _note_count(database) == 1
     assert db_tools.quick_check(database) == "ok"
+
+
+def test_remove_sqlite_sidecars(tmp_path):
+    database = tmp_path / "app.db"
+    database.touch()
+    wal = Path(f"{database}-wal")
+    shm = Path(f"{database}-shm")
+    wal.write_bytes(b"stale-wal")
+    shm.write_bytes(b"stale-shm")
+
+    db_tools._remove_sqlite_sidecars(database)
+
+    assert not wal.exists()
+    assert not shm.exists()
 
 
 def test_quick_check_requires_existing_database(tmp_path):
