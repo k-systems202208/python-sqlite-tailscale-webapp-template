@@ -170,7 +170,7 @@ try {
         "api",
         "-H", "X-GitHub-Api-Version: 2026-03-10",
         "repos/$Repository/rulesets",
-        "--jq", ".[] | select(.name == \"$RulesetName\") | {id,name,enforcement}"
+        "--jq", ".[] | select(.name == `"$RulesetName`") | {id,name,enforcement}"
     )
 }
 catch {
