@@ -67,7 +67,9 @@ def index():
 @require_user
 def add_item():
     try:
-        create_item(g.current_user["id"], request.form.get("title", ""), request.form.get("body", ""))
+        create_item(
+            g.current_user["id"], request.form.get("title", ""), request.form.get("body", "")
+        )
     except ValueError as exc:
         abort(400, description=str(exc))
     return redirect(url_for("main.index"))
