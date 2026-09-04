@@ -7,7 +7,10 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
+from dotenv import load_dotenv
+
 ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(ROOT / ".env")
 
 
 def default_database_path() -> Path:
@@ -54,6 +57,13 @@ def backup_database(
     return destination
 
 
+def _remove_sqlite_sidecars(database: Path) -> None:
+    for suffix in ("-wal", "-shm"):
+        sidecar = Path(f"{database}{suffix}")
+        if sidecar.exists():
+            sidecar.unlink()
+
+
 def restore_database(
     backup: Path,
     database: Path,
@@ -75,6 +85,7 @@ def restore_database(
         with sqlite3.connect(backup) as source, sqlite3.connect(temporary) as target:
             source.backup(target)
         quick_check(temporary)
+        _remove_sqlite_sidecars(database)
         os.replace(temporary, database)
     finally:
         if temporary.exists():
