@@ -1,5 +1,7 @@
 # Development
 
+Git / GitHub / GitHub Desktopの基本用語や、CommitとPushの違い、Pull Request、CI、Squash Mergeの流れがまだ分からない場合は、先に [../BEGINNER-GUIDE.md](../BEGINNER-GUIDE.md) を読んでください。
+
 このドキュメントは、開発開始後の日常的なIssue・Branch・doctor・品質チェック・Pull Request・CI・依存関係更新を扱います。稼働PCへの反映は [DEPLOYMENT.md](DEPLOYMENT.md)、運用は [OPERATIONS.md](OPERATIONS.md) を参照してください。
 
 ## 基本フロー
@@ -250,6 +252,8 @@ chore/70-update-dependencies
 - requirements / constraints変更
 - 認証・セキュリティ影響
 - README / docs更新
+
+GitHub DesktopでBranch作成からPR作成までの具体的な操作を確認したい場合は [../BEGINNER-GUIDE.md](../BEGINNER-GUIDE.md) を参照してください。
 
 ## Merge前チェック
 

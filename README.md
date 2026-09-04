@@ -4,6 +4,8 @@ Python / Flask、SQLite、Tailscale を使ったクローズドWebアプリ開�
 
 localhost限定のFlask / Waitress、Tailscale利用者識別、SQLite Migration、Backup / Restore、CSRF・セキュリティヘッダー、Ruff / pytest / Coverage、GitHub Actions CIを共通基盤として初期実装しています。`items` CRUDは仕組みを確認するための**丸ごと削除可能なサンプルfeature**として分離しています。
 
+> **Git / GitHubをほとんど使ったことがない場合は、最初に [BEGINNER-GUIDE.md](BEGINNER-GUIDE.md) を読んでください。** GitHub Desktopを使ったClone、Branch、Commit、Push、Pull Request、CI、Squash Mergeまでを、READMEを1行変更する練習付きで説明しています。
+
 ## 全体像
 
 ```mermaid
@@ -77,6 +79,8 @@ flowchart TD
 `requirements*.txt` には採用可能な範囲を記載し、`constraints.txt` にCI確認済みの既知良好バージョンを固定しています。
 
 ## クイックスタート
+
+Git / GitHubの操作に不安がある場合は、先に [BEGINNER-GUIDE.md](BEGINNER-GUIDE.md) の練習を1回行ってください。
 
 新しいアプリを作る場合はGitHubの **Use this template** から自分用リポジトリを作成し、そのリポジトリをCloneする方法を推奨します。
 
@@ -246,7 +250,7 @@ itemsサンプルのテストは `tests/test_sample_items.py` に分離してい
 
 GitHub ActionsではPython 3.11 / 3.12 / 3.13 / 3.14の各jobでdoctor、PowerShell / shell構文、依存関係、Ruff、pytest + Coverageを確認し、別jobでWindows PowerShell 5.1のGitHub設定スモークテストを実行します。
 
-Required Check名は従来どおり `test (3.11)`〜`test (3.14)` と `windows-powershell-51` のため、今回のdoctor追加でRulesetのcheck名は変わりません。
+Required Check名は `test (3.11)`〜`test (3.14)` と `windows-powershell-51` です。
 
 ## GitHub運用
 
@@ -259,30 +263,53 @@ flowchart LR
     CI --> M["Squash Merge"]
 ```
 
-## ドキュメント
+Gitの用語やGitHub Desktopの操作自体が分からない場合は [BEGINNER-GUIDE.md](BEGINNER-GUIDE.md)、RulesetやRepository設定は [docs/GITHUB-SETUP.md](docs/GITHUB-SETUP.md) を参照してください。
 
-推奨読書順:
+## ドキュメント - 目的から選ぶ
+
+「上から全部読む」のではなく、今やりたいことに合わせて選んでください。
 
 ```mermaid
-flowchart LR
-    A["GETTING-STARTED"] --> B["SQLITE / TAILSCALE"]
-    B --> C["CUSTOMIZING / EXTENDING"]
-    C --> D["DEVELOPMENT / DEPLOYMENT"]
-    D --> E["OPERATIONS"]
+flowchart TD
+    Q{"何をしたい?"}
+    Q -->|"Gitも初めて"| B["BEGINNER-GUIDE"]
+    Q -->|"まず起動したい"| G["GETTING-STARTED"]
+    Q -->|"自分のアプリに変えたい"| C["CUSTOMIZING / EXTENDING"]
+    Q -->|"技術を理解したい"| A["ARCHITECTURE / SQLITE / TAILSCALE / AUTH / SECURITY"]
+    Q -->|"GitHubを設定したい"| H["GITHUB-SETUP"]
+    Q -->|"反映・運用したい"| O["DEPLOYMENT / OPERATIONS"]
 ```
 
-- [GETTING-STARTED.md](GETTING-STARTED.md) - Cloneから開発開始まで
-- [docs/CUSTOMIZING.md](docs/CUSTOMIZING.md) - itemsサンプルから独自アプリへ作り替える手順
+### 初めて使う
+
+- [BEGINNER-GUIDE.md](BEGINNER-GUIDE.md) - Git / GitHub / GitHub Desktopをゼロから説明し、最初のPRを練習
+- [GETTING-STARTED.md](GETTING-STARTED.md) - Clone後のセットアップと初回起動
+
+### 自分のアプリへ変える
+
+- [docs/CUSTOMIZING.md](docs/CUSTOMIZING.md) - itemsサンプルから独自アプリへ作り替える
 - [docs/EXTENDING.md](docs/EXTENDING.md) - 独自feature追加時の共通契約
+
+### 技術を理解する
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - 構成と設計
 - [docs/SQLITE-SETUP.md](docs/SQLITE-SETUP.md) - Migration / Backup / Restore
 - [docs/TAILSCALE-SETUP.md](docs/TAILSCALE-SETUP.md) - Tailscale Serve
 - [docs/AUTH-CRUD.md](docs/AUTH-CRUD.md) - 利用者識別・認可・CRUD
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - 構成と設計
-- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) - 日常開発・品質ゲート
+- [docs/SECURITY.md](docs/SECURITY.md) - セキュリティ
+
+### GitHubを安全に設定する
+
+- [docs/GITHUB-SETUP.md](docs/GITHUB-SETUP.md) - Ruleset / Required Check / Merge設定
+
+### 開発する
+
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) - 日常開発・品質ゲート・Gitフロー
+
+### 稼働PCへ反映・運用する
+
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - 稼働PC反映
 - [docs/OPERATIONS.md](docs/OPERATIONS.md) - 日常確認・障害切り分け・Backup / Restore・Rollback
-- [docs/GITHUB-SETUP.md](docs/GITHUB-SETUP.md) - Ruleset / Merge設定
-- [docs/SECURITY.md](docs/SECURITY.md) - セキュリティ
 
 ## セキュリティ
 

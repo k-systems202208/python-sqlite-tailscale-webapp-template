@@ -2,6 +2,8 @@
 
 このドキュメントは、このテンプレートから作成したリポジトリへmain保護・Pull Request・CI・Squash Merge設定を適用する方法を説明します。
 
+**Git / GitHubの用語やGitHub Desktopの操作自体がまだ分からない場合は、先に [../BEGINNER-GUIDE.md](../BEGINNER-GUIDE.md) を読んでください。** このドキュメントは「Gitをどう使うか」ではなく、「Repositoryを安全な運用ルールに設定する方法」を扱います。
+
 ## 全体像
 
 ```mermaid
@@ -190,6 +192,8 @@ flowchart LR
     R --> M["Squash Merge"]
 ```
 
+このフローをGitHub Desktopで実際に一度練習する手順は [../BEGINNER-GUIDE.md](../BEGINNER-GUIDE.md) を参照してください。
+
 ## 12. よくあるエラー
 
 ### `gh` が見つからない
@@ -216,6 +220,7 @@ ChatGPT等のGitHub Appを使う場合、対象リポジトリがAppのRepositor
 
 ## 関連ドキュメント
 
+- [../BEGINNER-GUIDE.md](../BEGINNER-GUIDE.md) - Git / GitHub / GitHub Desktopの初心者向け説明
 - [../GETTING-STARTED.md](../GETTING-STARTED.md)
 - [DEVELOPMENT.md](DEVELOPMENT.md)
 - [DEPLOYMENT.md](DEPLOYMENT.md)
