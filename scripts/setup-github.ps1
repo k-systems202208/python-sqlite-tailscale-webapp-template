@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$Repository = "",
     [string]$RulesetName = "Protect main"
@@ -117,22 +117,21 @@ Write-Host "  Squash Merge only / Auto delete head branches: OK" -ForegroundColo
 
 Write-Host "[2/3] Protect main Ruleset" -ForegroundColor Yellow
 try {
-    $rulesetsJson = Invoke-GhText @(
+    $existingRulesetId = Invoke-GhText @(
         "api",
         "-H", "X-GitHub-Api-Version: 2026-03-10",
-        "repos/$Repository/rulesets"
+        "repos/$Repository/rulesets",
+        "--jq", ".[] | select(.name == `"$RulesetName`") | .id"
     )
-    $rulesets = @($rulesetsJson | ConvertFrom-Json)
-    $existing = $rulesets | Where-Object { $_.name -eq $RulesetName } | Select-Object -First 1
 
-    if ($null -ne $existing) {
-        Write-Host "  Existing Ruleset found (ID: $($existing.id)). Updating..."
+    if (-not [string]::IsNullOrWhiteSpace($existingRulesetId)) {
+        Write-Host "  Existing Ruleset found (ID: $existingRulesetId). Updating..."
         Invoke-GhText @(
             "api",
             "--method", "PUT",
             "-H", "X-GitHub-Api-Version: 2026-03-10",
             "--input", $rulesetPath,
-            "repos/$Repository/rulesets/$($existing.id)"
+            "repos/$Repository/rulesets/$existingRulesetId"
         ) | Out-Null
         Write-Host "  Ruleset updated: OK" -ForegroundColor Green
     }
