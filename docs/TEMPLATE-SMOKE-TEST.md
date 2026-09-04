@@ -30,6 +30,10 @@ python -m pytest --cov=app --cov=scripts.db_tools --cov-report=term-missing --co
 
 GitHubで **Use this template** を選択し、テスト用の新しいRepositoryを作成します。
 
+> **Use this templateで作成しても、元RepositoryのRulesetは引き継がれません。** 新Repository側で後述の `scripts/setup-github.ps1` を実行します。
+
+ChatGPT / CodexからGitHub操作を行う場合、GitHub AppのRepository accessが `Only select repositories` になっている環境では、**新しく作成したRepositoryをGitHub連携のアクセス対象へ追加**します。追加しない場合、AIからIssue / Branch / Pull Request等を操作すると403になることがあります。
+
 ### 2. Cloneして最初の診断を行う
 
 ```powershell
@@ -47,8 +51,11 @@ gh auth login
 .\scripts\setup-github.ps1
 ```
 
+この手順はテンプレート本体ではなく、**Use this templateで作成した新RepositoryのローカルClone内から実行**します。別テンプレートの `setup-github.ps1` やRuleset JSONを流用しません。
+
 確認事項:
 
+- `Protect main` RulesetがActive
 - Pull Request必須
 - Python 3.11〜3.14とWindows PowerShell 5.1がRequired Check
 - Conversation resolution必須
@@ -56,6 +63,7 @@ gh auth login
 - Squash Merge only
 - Force push禁止
 - main削除禁止
+- bypassなし
 
 詳細は [GITHUB-SETUP.md](GITHUB-SETUP.md) を参照してください。
 
@@ -117,6 +125,8 @@ app/features/equipment/
 
 設計の詳細は [EXTENDING.md](EXTENDING.md) を参照してください。
 
+Migration versionはRepository全体で一意にします。itemsの `002_sample_items.sql` を**一度でも適用した可能性がある場合はversion 2を再利用せず、次の未使用version（例: `003_equipment.sql`）を使う**のが安全です。
+
 最低限確認すること:
 
 - feature固有処理を `app/core/` へ混ぜていない
@@ -127,7 +137,22 @@ app/features/equipment/
 - feature固有テストを追加した
 - `scripts/check` が成功する
 
-### 7. Gitフローを1回通す
+### 7. アプリ名・READMEを独自アプリ向けに変更する
+
+テンプレート名やitemsサンプルの説明をそのまま残さず、アプリ名・目的・主要URL・開発開始方法を独自アプリ向けに更新します。
+
+ただしREADMEを短く作り直す場合でも、共通基盤の運用・拡張・受入手順への導線は残します。
+
+最低限、次へのリンクを残すことを推奨します。
+
+- `BEGINNER-GUIDE.md`
+- `docs/OPERATIONS.md`
+- `docs/EXTENDING.md`
+- `docs/TEMPLATE-SMOKE-TEST.md`
+
+共通契約テストがこれらの導線を確認しているため、独自アプリ化で不用意に削除するとCIが検出します。
+
+### 8. Gitフローを1回通す
 
 ```text
 Issue
@@ -141,7 +166,28 @@ Pull Request
 Python 3.11〜3.14 + Windows PowerShell 5.1 CI
   ↓
 Squash Merge
+  ↓
+main CI
 ```
+
+PR CI成功後だけでなく、Squash Merge後のmain CIも成功することを確認します。
+
+## 実地テストで確認できた注意点
+
+実際にテンプレートから別Repositoryを作成して第三者利用フローを通した際、次の点が確認されました。
+
+1. **RulesetはUse this templateでは引き継がれない**
+   - 新Repositoryで `setup-github.ps1` を実行する必要がある
+2. **AIのGitHub連携対象は新Repository作成だけでは増えない場合がある**
+   - GitHub Appが選択Repository方式なら新Repositoryを追加する
+3. **独自READMEへ置換すると共通ドキュメント導線を落としやすい**
+   - `OPERATIONS.md` 等へのリンクが消えると契約テストが失敗する
+4. **Migration versionの再利用は避ける**
+   - sample versionを適用済みか不明なら次の未使用versionを使う
+5. **テンプレートの共通基盤はsample削除後も成立した**
+   - 独自feature追加後もPython 3.11〜3.14、Windows PowerShell 5.1、Coverage、sampleless smoke testを通過できた
+
+これらは「失敗を避けるための追加機能」ではなく、テンプレートを第三者へ渡したときの実際の利用手順として維持します。
 
 ## Tailscale確認
 
@@ -156,12 +202,16 @@ Squash Merge
 ## 合格条件
 
 - Use this templateから新しいRepositoryを作成できる
+- 必要な場合は新RepositoryをChatGPT / CodexのGitHub連携対象へ追加できる
+- 新Repositoryへ `Protect main` Rulesetを適用できる
 - `python -m scripts.doctor` に致命的エラーがない
 - 初期状態で `scripts/check` 成功
 - items feature削除後も共通pytest + Coverage成功
 - 独自feature追加後も `scripts/check` 成功
+- 独自READMEに共通運用・拡張ドキュメントへの導線がある
 - Pull Requestの5 Required Jobs成功
 - Squash Mergeできる
+- merge後main CIが成功する
 - 必要な場合はTailscale Serve経由でも利用できる
 
 ## 失敗した場合
@@ -176,5 +226,9 @@ items削除後に失敗した場合は、**共通基盤がitems固有コード�
 - `tests/test_sample_items.py`
 - `tests/test_template_lifecycle.py`
 - README / docsの固定パス参照
+
+README変更後だけ失敗する場合は、共通ドキュメントへのリンクを落としていないか確認します。
+
+GitHub設定で詰まる場合は、**実行している `setup-github.ps1` が対象Repository自身のCloneに含まれるものか**、またGitHub App / `gh auth` が対象Repositoryへアクセスできるか確認します。
 
 サンプルを残すことでテストを通すのではなく、共通基盤とsample featureの依存を切り離して修正してください。
