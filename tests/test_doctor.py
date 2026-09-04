@@ -50,9 +50,7 @@ def test_doctor_reads_env_and_existing_data_dir(tmp_path):
         for check in result["checks"]
     )
     assert all(
-        check["level"] == "PASS"
-        for check in result["checks"]
-        if "command:" in check["message"]
+        check["level"] == "PASS" for check in result["checks"] if "command:" in check["message"]
     )
 
 
