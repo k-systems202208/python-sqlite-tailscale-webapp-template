@@ -30,6 +30,8 @@ def test_protect_main_ruleset_matches_template_policy():
         "test (3.11)",
         "test (3.12)",
         "test (3.13)",
+        "test (3.14)",
+        "windows-powershell-51",
     }
 
 
