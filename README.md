@@ -1,147 +1,113 @@
-# Python + SQLite + Tailscale ローカルWebアプリ テンプレート
+# Python + SQLite + Tailscale Web App Template
 
-**Python・SQLite・Tailscaleを使って、家庭内・社内・個人用のクローズドなWebアプリを作るためのテンプレートです。**
+Python / Flask、SQLite、Tailscale を使ったクローズドWebアプリ開発をすぐに始めるための**共通テンプレート**です。
 
-このリポジトリを元に、在庫管理、予約管理、チェックリスト、家計管理、設備管理、メディア管理など、用途に合わせたローカルWebアプリを開発できます。
+localhost限定のFlaskアプリ、SQLite、Tailscale Serve、利用者識別、利用者別CRUD、CSRF・セキュリティヘッダー、pytest、GitHub Actions CIまでを初期実装し、新規アプリごとの定型セットアップを減らします。第三者がこのリポジトリから新しいリポジトリを作成し、サンプル `items` を削除・置換して、用途を問わず自分のローカルWebアプリを作ることを前提にしています。
 
-## 開発時の重要ルール
-
-このテンプレートでは、変更履歴と変更理由を確実に残すため、**mainへの直接Commit / Pushを禁止**します。READMEの誤字修正など、どんなに軽微な変更も例外ではありません。
-
-標準フローは次です。
-
-```text
-日本語Issueを作成
-   ↓
-Issue番号入り作業ブランチ
-   ↓
-実装・テスト
-   ↓
-Commit / Push
-   ↓
-Pull Request
-   ↓
-CI・差分確認
-   ↓
-Squash Merge
-   ↓
-Issue Close
-   ↓
-作業ブランチ削除
-```
-
-mainへ取り込む変更単位ごとにIssueを作成し、**Issueのタイトルと本文は日本語で記載**します。ブランチ名にはIssue番号を含め、PR本文から `Closes #Issue番号` でIssueを関連付けます。
-
-作業ブランチに複数Commitがあっても、mainへは原則 **Squash Merge** でPR単位の1Commitとして取り込みます。
-
-詳しいルールは [開発・CI・ローカル反映・デプロイ運用](docs/DEVELOPMENT-DEPLOYMENT.md) と [コントリビューションガイド](CONTRIBUTING.md) を参照してください。
-
----
-
-## 基本構成
+## このテンプレートの全体像
 
 ```mermaid
 flowchart LR
-    B[PC / スマートフォンのブラウザ] -->|HTTPS / Tailscale| TS[Tailscale Serve]
-    TS -->|localhostへ転送| APP[Python / Flask\n127.0.0.1:8000]
-    APP --> DB[(SQLite)]
-    APP --> UI[HTML / CSS / JavaScript]
+    A["Use this template / Clone"] --> B["bootstrap"]
+    B --> C["localhostでサンプル確認"]
+    C --> D["SQLite / Tailscale設定"]
+    D --> E["独自アプリへ作り替え"]
+    E --> F["pytest / GitHub Actions CI"]
+    F --> G["稼働PC + Tailscale Serve"]
 ```
 
-- **Python / Flask**：Webアプリ本体
-- **SQLite**：データ保存
-- **HTML / CSS / JavaScript**：ブラウザ画面
-- **Tailscale Serve**：許可した端末・ユーザーからの接続
+## このテンプレートの考え方
 
-アプリは初期状態では `127.0.0.1` のみに公開されます。Tailscaleを有効にすると、同じtailnetに参加しているスマートフォンや別PCからHTTPSでアクセスできます。
+このリポジトリは完成済みのタスク管理アプリではありません。
 
----
+`items` は、SQLite CRUD・利用者識別・所有者によるデータ分離・CSRFを確認するための**削除可能なサンプル**です。新しいアプリを作る際は、必要に応じて自由に削除・置換してください。
 
-## このテンプレートの特徴
+テンプレートとして原則残すもの:
 
-- クラウドDB不要
-- SQLiteなのでDBサーバーの構築不要
-- ルーターのポート開放不要
-- `0.0.0.0` への公開を禁止
-- Tailscale Funnelは使用しない
-- データはアプリを動かすPC内に保存
-- Tailscale利用者を識別可能
-- 利用者ごとのデータ分離に対応
-- CSRF対策・CSPなど基本的なWebセキュリティ対策を実装済み
-- pytestによる自動テスト付き
-- GitHub ActionsによるCI付き
-- Issue / Branch / PR / Squash Mergeによる変更管理
-- Issueテンプレート / PRテンプレート付き
-- GitHub Ruleset / Merge設定の自動セットアップ付き
-- MIT License
+- Flask / Waitress の基本構成
+- `127.0.0.1` のみで待ち受ける安全設計
+- SQLite接続・初期化の仕組み
+- Tailscale Serve経由の利用者識別
+- localhost用ローカルオーナー
+- 認証と認可を分ける設計
+- CSRF対策・セキュリティヘッダー
+- pytest / GitHub Actions CI
+- Issue → Branch → PR → CI → Squash Merge のGitHub運用
 
----
+案件ごとに置き換えるもの:
 
-## 新しいアプリを開発するときの3段階
+- アプリ名・説明
+- `items` サンプルテーブル
+- `app/services/items.py`
+- `app/routes.py` の業務URL / API
+- `app/templates/` / `app/static/` の画面
+- 業務固有のテスト
+- `.env` のローカル設定
+- SQLiteのバックアップ・移行方針
 
-```text
-① 作り始める
-GETTING-STARTED.md
-  自分用リポジトリ作成 → Clone → GitHub初期設定 → 初回起動 → AIへ最初の依頼
-        ↓
-② 作る
-CUSTOMIZE.md
-  データ設計 → SQLite → 業務処理 → API → 画面 → テスト
-        ↓
-③ 変更を運ぶ
-DEVELOPMENT-DEPLOYMENT.md
-  日本語Issue → Issue番号入りBranch → PR → CI → Squash Merge → Pull
+### 残すもの / 置き換えるもの
+
+```mermaid
+flowchart TD
+    T["共通テンプレート"] --> K["原則として残す"]
+    T --> R["案件ごとに置き換える"]
+
+    K --> K1["Flask / Waitress"]
+    K --> K2["localhost + Tailscale Serve"]
+    K --> K3["認証 / 認可 / CSRF"]
+    K --> K4["SQLite接続基盤"]
+    K --> K5["CI / GitHub運用"]
+
+    R --> R1["画面 / UI"]
+    R --> R2["itemsサンプル"]
+    R --> R3["業務テーブル / Service / Route"]
+    R --> R4["アプリ名 / 環境設定"]
+    R --> R5["バックアップ / 運用設定"]
 ```
 
-| 今やりたいこと | 読むガイド |
-| --- | --- |
-| 新しいアプリを作り始めたい | **[① 新規開発スタートガイド](docs/GETTING-STARTED.md)** |
-| GitHubのmain保護・PR・Squash設定を簡単に適用したい | **[GitHub初期設定ガイド](docs/GITHUB-SETUP.md)** |
-| サンプル `items` を自分の機能へ作り替えたい | **[② カスタマイズガイド](docs/CUSTOMIZE.md)** |
-| Issue / PR / CI / Pull / Releaseを知りたい | **[③ 開発・CI・ローカル反映・デプロイ運用](docs/DEVELOPMENT-DEPLOYMENT.md)** |
+具体的な作り替え手順は [docs/CUSTOMIZING.md](docs/CUSTOMIZING.md) を参照してください。
 
-### その他のドキュメント
+## 技術構成
 
-| ドキュメント | 内容 |
-| --- | --- |
-| [GitHub初期設定](docs/GITHUB-SETUP.md) | Ruleset、Squash Merge、Branch自動削除の自動・手動設定 |
-| [アーキテクチャ](docs/ARCHITECTURE.md) | Python / Flask / SQLite / Tailscaleの役割と全体構成 |
-| [セキュリティ設計](docs/SECURITY.md) | localhost、Tailscale利用者識別、CSRF、認証・認可など |
-| [コントリビューションガイド](CONTRIBUTING.md) | Issue / Branch / PR / Squash Merge / テスト等の必須ルール |
-| [ライセンス](LICENSE) | MIT License |
+- Python 3.11以上（CI: 3.11 / 3.12 / 3.13）
+- Flask 3.1系
+- Waitress 3系
+- SQLite
+- Jinja / HTML / CSS / JavaScript
+- Tailscale Serve
+- python-dotenv
+- pytest
+- GitHub Actions CI
 
----
+## 含まれるもの
 
-## 必要なもの
+- `127.0.0.1:8000` で動くFlask / Waitressアプリ
+- `data/app.db` のSQLiteデータベース
+- `users` / `items` サンプルSchema
+- localhostのローカルオーナー識別
+- Tailscale Serveの利用者ヘッダーによる識別
+- 利用者ごとの `items` データ分離
+- HTML画面とJSON APIのサンプル
+- `/healthz` ヘルスチェック
+- `/api/me` / `/api/items`
+- CSRF対策
+- CSP等のセキュリティヘッダー
+- Windows / macOS / Linux用セットアップスクリプト
+- Tailscale Serve / resetスクリプト
+- GitHub Ruleset / Merge設定の自動セットアップ
+- Python 3.11 / 3.12 / 3.13 のpytest CI
+- Windows PowerShell 5.1でのGitHubセットアップスモークテスト
 
-- Git
-- Python 3.11以上
-- 開発・稼働用PC
-- GitHub CLI（GitHub初期設定を自動化する場合）
-- 外部端末から利用する場合はTailscale
+## クイックスタート
 
----
+GitHub上では **Use this template** から自分用リポジトリを作る方法を推奨します。テンプレート自体を試すだけならCloneでも構いません。
 
-## テンプレートを試す
-
-```text
+```bash
 git clone https://github.com/k-systems202208/python-sqlite-tailscale-webapp-template.git
 cd python-sqlite-tailscale-webapp-template
 ```
 
-新しいアプリを開発する場合は、元テンプレートを直接編集せず、自分用リポジトリを作成してください。詳しくは [新規開発スタートガイド](docs/GETTING-STARTED.md) を参照してください。
-
-### GitHub推奨設定を自動適用する（Windows）
-
-自分用リポジトリをCloneしたあと、GitHub CLIで認証済みなら次を実行できます。
-
-```powershell
-.\scripts\setup-github.ps1
-```
-
-これにより、`Protect main` Ruleset、PR必須、CI必須、Squash Mergeのみ、Merge後の作業ブランチ自動削除などをまとめて設定します。詳しくは [GitHub初期設定ガイド](docs/GITHUB-SETUP.md) を参照してください。
-
-### Windows
+Windows PowerShell:
 
 ```powershell
 .\scripts\bootstrap.ps1
@@ -149,7 +115,7 @@ Copy-Item .env.example .env
 .\scripts\start.ps1
 ```
 
-### macOS / Linux
+macOS / Linux:
 
 ```bash
 ./scripts/bootstrap.sh
@@ -159,118 +125,45 @@ cp .env.example .env
 
 ブラウザで `http://127.0.0.1:8000` を開きます。
 
----
+`.env` の最小例:
 
-## 初期設定 `.env`
-
-```text
+```env
 APP_NAME=Local Web App
 LOCAL_OWNER_EMAIL=owner@example.local
 LOCAL_OWNER_NAME=Local Owner
 ```
 
-`.env`、`data/app.db`、`.venv/` はGitHubへ登録しません。
-
----
+初回利用の詳細は [GETTING-STARTED.md](GETTING-STARTED.md) を参照してください。
 
 ## Tailscaleで別端末から使う
 
-```text
+アプリ本体は `127.0.0.1` のままにし、別端末からの入口にはTailscale Serveを使います。
+
+Windows:
+
+```powershell
+.\scripts\tailscale-serve.ps1
+```
+
+または:
+
+```powershell
 tailscale serve --bg 8000
 tailscale serve status
 ```
 
-表示されたHTTPS URLを、同じtailnetに参加している端末から開きます。
+**Pythonアプリを `0.0.0.0` へ変更しないでください。** 詳細は [docs/TAILSCALE-SETUP.md](docs/TAILSCALE-SETUP.md) を参照してください。
 
-**Pythonアプリを `0.0.0.0` へ変更しないでください。** Pythonは `127.0.0.1` のみに待ち受け、Tailscale Serveを入口にします。
+## サンプルURL
 
----
+- `/` `items` 一覧・登録・完了切替・削除
+- `/healthz` ヘルスチェック
+- `/api/me` 現在の利用者情報
+- `/api/items` 利用者本人の `items` JSON API
 
-## サンプル機能
+サンプルの認証・利用者分離・CRUDの仕組みは [docs/AUTH-CRUD.md](docs/AUTH-CRUD.md) を参照してください。
 
-動作確認用の `items` 管理機能があります。登録、完了状態切替、削除、利用者ごとのデータ分離を確認できます。
-
-実際のアプリへ置き換える方法は [カスタマイズガイド](docs/CUSTOMIZE.md) を参照してください。
-
----
-
-## GitHubテンプレートと設定ファイル
-
-変更管理とGitHub設定の抜け漏れを減らすため、次を用意しています。
-
-```text
-.github/ISSUE_TEMPLATE/change-request.md
-.github/pull_request_template.md
-github/protect-main.ruleset.json
-scripts/setup-github.ps1
-```
-
-Issueは目的・対応内容・影響範囲・完了条件、PRは対応Issue・変更内容・テスト・影響範囲・ドキュメント更新状況を確認できる構成です。
-
-`protect-main.ruleset.json` はGitHub Rulesetの再利用可能な定義で、`setup-github.ps1` はそのRulesetとリポジトリのMerge設定を適用します。
-
----
-
-## フォルダー構成
-
-```text
-python-sqlite-tailscale-webapp-template/
-├─ .github/
-│  ├─ ISSUE_TEMPLATE/
-│  │  └─ change-request.md
-│  ├─ pull_request_template.md
-│  └─ workflows/
-│     └─ ci.yml
-├─ app/
-│  ├─ auth.py
-│  ├─ config.py
-│  ├─ csrf.py
-│  ├─ db.py
-│  ├─ routes.py
-│  ├─ schema.sql
-│  ├─ security.py
-│  ├─ services/
-│  ├─ templates/
-│  └─ static/
-├─ docs/
-│  ├─ GETTING-STARTED.md
-│  ├─ GITHUB-SETUP.md
-│  ├─ CUSTOMIZE.md
-│  ├─ DEVELOPMENT-DEPLOYMENT.md
-│  ├─ ARCHITECTURE.md
-│  └─ SECURITY.md
-├─ github/
-│  └─ protect-main.ruleset.json
-├─ scripts/
-│  ├─ setup-github.ps1
-│  └─ ...
-├─ tests/
-├─ .env.example
-├─ CONTRIBUTING.md
-├─ LICENSE
-├─ requirements.txt
-└─ run.py
-```
-
----
-
-## セキュリティの基本方針
-
-- Pythonは `127.0.0.1` のみにbind
-- `0.0.0.0` など外部IPへのbindを拒否
-- 外部接続はTailscale Serve経由
-- Tailscale Funnelは使用しない
-- CORSは初期状態で有効化しない
-- 更新リクエストにCSRF対策
-- `HttpOnly` / `SameSite=Strict` Cookie
-- Content Security Policy等のセキュリティヘッダー
-- 利用者単位のデータ分離
-
-詳しくは [セキュリティ設計](docs/SECURITY.md) を参照してください。
-
----
-
-## テスト
+## 開発コマンド
 
 Windows:
 
@@ -284,68 +177,86 @@ macOS / Linux:
 .venv/bin/python -m pytest
 ```
 
-GitHubへ作業ブランチをPushするとCIが実行されます。CI成功後、PRの差分を確認してSquash Mergeでmainへ取り込みます。
+GitHub ActionsではPython 3.11 / 3.12 / 3.13でpytestを実行し、`setup-github.ps1` の構文・UTF-8 BOM・Windows PowerShell 5.1動作も確認します。
 
----
+## ドキュメント
 
-## GitHub側のmain保護
+初めて利用する場合は、次の順で読むと全体を追いやすくなります。
 
-ドキュメント上のルールに加えて、GitHubのRulesetsでmainを保護します。
-
-Windowsでは、対象リポジトリで次を実行する方法を推奨します。
-
-```powershell
-.\scripts\setup-github.ps1
+```mermaid
+flowchart LR
+    A["GETTING-STARTED"] --> B["SQLITE-SETUP"]
+    B --> C["TAILSCALE-SETUP"]
+    C --> D["CUSTOMIZING"]
+    D --> E["DEPLOYMENT"]
 ```
 
-自動設定される主な内容：
+- [GETTING-STARTED.md](GETTING-STARTED.md) - テンプレートから開発開始まで
+- [docs/SQLITE-SETUP.md](docs/SQLITE-SETUP.md) - SQLiteの初期化・Schema・バックアップ・変更方針
+- [docs/TAILSCALE-SETUP.md](docs/TAILSCALE-SETUP.md) - Tailscale Serveと別端末アクセス
+- [docs/CUSTOMIZING.md](docs/CUSTOMIZING.md) - サンプルから独自アプリへ作り替える手順
+- [docs/AUTH-CRUD.md](docs/AUTH-CRUD.md) - 利用者識別・認可・サンプルCRUD
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - 構成と設計方針
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) - 日常のIssue・Git・CI・依存関係更新
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - 稼働PCへの反映・Tailscale・Release運用
+- [docs/GITHUB-SETUP.md](docs/GITHUB-SETUP.md) - Ruleset / Squash Merge等の初期設定
+- [docs/SECURITY.md](docs/SECURITY.md) - セキュリティ方針
+- [CONTRIBUTING.md](CONTRIBUTING.md) - このテンプレート本体への変更ルール
 
-- Pull Request経由の変更を必須にする
-- CI `test (3.11)` / `test (3.12)` / `test (3.13)` の成功を必須にする
-- 未解決Conversationがある場合はMerge不可にする
-- Squash Mergeのみ許可する
-- linear historyを必須にする
-- force pushを禁止する
-- Default branch削除を禁止する
-- Merge後のhead branch自動削除を有効にする
-- Bypassを設定しない
+## CI
 
-GitHub CLIを使わない場合は `github/protect-main.ruleset.json` をRulesets画面からImportできます。詳細は [GitHub初期設定ガイド](docs/GITHUB-SETUP.md) を参照してください。
+PushおよびPull RequestでPython 3.11 / 3.12 / 3.13のpytestを実行します。また、GitHub初期設定スクリプトについてLinux上のPowerShell構文・文字コード確認とWindows PowerShell 5.1スモークテストを実行します。
 
----
+```mermaid
+flowchart LR
+    P["Push / Pull Request"] --> S["PowerShell構文 / BOM"]
+    P --> W["Windows PowerShell 5.1 smoke"]
+    S --> T11["pytest 3.11"]
+    S --> T12["pytest 3.12"]
+    S --> T13["pytest 3.13"]
+    W --> OK["CI Success"]
+    T11 --> OK
+    T12 --> OK
+    T13 --> OK
+```
 
-## よくある質問
+## GitHub運用
 
-### 小さなREADME修正だけならmainへ直接Commitしてよいですか？
+このテンプレート本体では、mainへの直接Commit / Pushを行いません。
 
-**いいえ。禁止です。** 日本語Issueを作成し、Issue番号入り作業ブランチで修正してPRからmainへSquash Mergeします。
+```mermaid
+flowchart LR
+    I["日本語Issue"] --> B["Issue番号入りBranch"]
+    B --> C["変更 / テスト"]
+    C --> P["Pull Request"]
+    P --> CI["GitHub Actions CI"]
+    CI --> M["Squash Merge"]
+```
 
-### Issueは不具合のときだけ必要ですか？
+推奨Rulesetは `scripts/setup-github.ps1` で適用できます。詳細は [docs/GITHUB-SETUP.md](docs/GITHUB-SETUP.md) を参照してください。
 
-いいえ。新機能、修正、リファクタリング、テスト、ドキュメント、誤字修正を含め、mainへ取り込むすべての変更単位でIssueを作成します。
+## セキュリティ
 
-### ブランチ名は自由ですか？
+Tailscaleだけを唯一の防御にしません。ネットワーク、アプリ、データの3層で守ります。
 
-用途を表すプレフィックスとIssue番号を含めます。例：`feat/12-inventory-search`、`fix/18-user-isolation`、`docs/23-update-readme`。
+```mermaid
+flowchart LR
+    T["Tailscale"] --> A["Flask 認証 / 認可 / CSRF"]
+    A --> D["SQLite / OS / Backup"]
+```
 
-### なぜSquash Mergeを使うのですか？
+- Flask / Waitressは `127.0.0.1` のみにbind
+- Tailscale利用者ヘッダーはloopback経由のときだけ信用
+- 画面だけでなくSQLでも所有者条件を付ける
+- `.env` / `data/` / 秘密鍵はGitHubへコミットしない
+- Tailscale Funnelを前提にしない
 
-作業中の細かなCommitをPR単位の1Commitへまとめ、mainの履歴をIssue / PR単位で読みやすくするためです。
+詳細は [docs/SECURITY.md](docs/SECURITY.md) を参照してください。
 
-### GitHubの設定を毎回手作業で行う必要がありますか？
+## テンプレートとしての運用
 
-Windowsでは `scripts/setup-github.ps1` を用意しています。GitHub CLIで認証した状態で実行すると、Rulesetと主要なPull Request設定をまとめて適用できます。
+このリポジトリ自体には案件固有仕様を積み上げません。サンプル機能は実装例として維持し、特定業務向けの機能追加は、このテンプレートから作成した各アプリ側で行います。
 
-### ChatGPT / CodexがGitHubを変更する場合も同じですか？
+## License
 
-はい。同じです。AIから変更する場合も、先に日本語Issueを作成し、Issue番号入り作業ブランチへ変更し、PR・CI・Squash Mergeを経由します。
-
-### GitHubの変更はローカルPCへ自動反映されますか？
-
-いいえ。PRをMergeしたあと、稼働PCでmainをPullして反映します。
-
----
-
-## ライセンス
-
-MIT License
+MIT Licenseです。第三者はLICENSEの条件に従って、利用・変更・再配布できます。詳細は [LICENSE](LICENSE) を参照してください。

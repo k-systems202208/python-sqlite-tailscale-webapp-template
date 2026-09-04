@@ -1,135 +1,200 @@
-# アーキテクチャ
+# Architecture
 
-## この文書について
-
-このテンプレートが「どのような構成で動いているか」と、「自分のアプリを作るときに、どこを残してどこを変更すればよいか」を説明します。
-
-難しく考える必要はありません。基本構成は、**自宅や社内の1台のPCでPythonのWebアプリとSQLiteを動かし、必要な場合だけTailscale経由で安全にアクセスする**というものです。
+このテンプレートは、1台のホストPCでPython / FlaskとSQLiteを動かし、必要な場合だけTailscale Serve経由で別端末から利用する、小規模なクローズドWebアプリ向けの構成です。
 
 ## 全体構成
 
-```text
-PC / スマートフォンのブラウザ
-        |
-        | HTTPS（Tailscaleのtailnet内）
-        v
-   Tailscale Serve
-        |
-        | localhostへのリバースプロキシ
-        | + 利用者情報ヘッダー
-        v
-127.0.0.1:8000 / Waitress
-        |
-        v
-      Flask
-        |
-        |-- auth.py       利用者の識別
-        |-- csrf.py       不正な更新リクエストの防止
-        |-- routes.py     URL / APIの受付
-        |-- services/     アプリ固有の処理
-        |-- db.py         SQLiteへの接続
-        |-- templates/    HTML画面
-        +-- static/       CSS / JavaScript
-        |
-        v
-   data/app.db
-      SQLite
+```mermaid
+flowchart LR
+    U["PC / Smartphone"] -->|"HTTPS / tailnet"| TS["Tailscale Serve"]
+    TS -->|"localhost + identity headers"| W["Waitress\n127.0.0.1:8000"]
+    W --> F["Flask"]
+    F --> A["auth / csrf / security"]
+    F --> R["routes"]
+    R --> S["services"]
+    S --> DB["db.py"]
+    DB --> Q[("SQLite\ndata/app.db")]
+    F --> UI["Jinja / CSS / JavaScript"]
 ```
 
-Tailscaleを使わず、アプリを動かしているPC自身から利用する場合は、ブラウザから直接 `127.0.0.1:8000` にアクセスします。
+ホストPC自身から利用する場合はTailscale Serveを経由せず、ブラウザから直接 `http://127.0.0.1:8000` を開きます。
 
-## 各技術の役割
+## 各レイヤーの役割
 
-### Python / Flask
-
-Webアプリ本体です。ブラウザからの要求を受け取り、必要な処理を行って画面やJSONを返します。
-
-### Waitress
-
-Flaskアプリを実際に待ち受けるWebサーバーです。このテンプレートでは安全性を優先し、`127.0.0.1` のみで待ち受けます。
-
-### SQLite
-
-アプリのデータを保存します。別途データベースサーバーを構築する必要はなく、`data/app.db` という1つのファイルとして管理されます。
+```mermaid
+flowchart TD
+    N["Network"] --> P["Waitress / Flask"]
+    P --> ID["Identity / Security"]
+    ID --> RT["Routes"]
+    RT --> SV["Services"]
+    SV --> DB["SQLite"]
+    P --> UI["Templates / Static"]
+```
 
 ### Tailscale Serve
 
-別のPCやスマートフォンからアプリへアクセスするときの入口です。ルーターのポート開放をせず、Tailscaleのネットワーク内からアプリへ接続できます。
+別端末からの安全な入口です。ルーターのポート開放やFlaskの外部公開を行わず、tailnet内からHTTPSでアクセスします。
 
-Tailscaleはデータベースではありません。**アプリのデータそのものはホストPC上のSQLiteに保存されます。**
+### Waitress
 
-## 自分のアプリを作るときも残す部分
+Flaskアプリを実際に待ち受けるWebサーバーです。このテンプレートでは `127.0.0.1` のみにbindします。
 
-サンプルの `items` 機能を別のアプリへ置き換えても、基本的には次の仕組みを残すことを推奨します。
+### Flask
 
-- Webサーバーはlocalhost（`127.0.0.1`）だけで待ち受ける
-- 外部端末からの入口にはTailscale Serveを使う
-- HTTPの入口で利用者を識別する
-- 現在の利用者を `g.current_user` から参照する
-- データの所有者チェックを画面だけでなくSQLでも行う
-- リクエスト単位でSQLite接続を管理する
-- POST / PUT / PATCH / DELETEではCSRF対策を行う
-- セキュリティヘッダーを維持する
-- 他の利用者のデータを参照・変更できないことをテストする
+HTTPリクエスト、利用者情報、画面・API、CSRF、セキュリティヘッダーなどを担当します。
 
-## 自由に置き換える部分
+### SQLite
 
-最初から入っている `items` は、テンプレートの動作を確認するためのサンプルです。
+アプリデータを `data/app.db` に保存します。DBサーバーは不要です。接続は `app/db.py` でリクエスト単位に管理します。
 
-たとえば、次のようなアプリへ自由に置き換えられます。
+## リクエストの流れ
 
-```text
-items
-  |
-  +-- 在庫管理
-  +-- 予約管理
-  +-- 家計簿
-  +-- チェックリスト
-  +-- 設備管理
-  +-- メディア管理
-  +-- 作業記録
-  +-- 家庭内ツール
-  +-- 社内ツール
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant T as Tailscale Serve
+    participant F as Flask
+    participant D as SQLite
+
+    B->>T: HTTPS request
+    T->>F: localhost request + identity headers
+    F->>F: resolve_identity / ensure_user
+    F->>D: owner_user_id条件付きSQL
+    D-->>F: current user's rows
+    F-->>B: HTML / JSON
 ```
 
-主に変更するのは `schema.sql`、`services/`、`routes.py`、`templates/` です。詳しくは [CUSTOMIZE.md](CUSTOMIZE.md) を参照してください。
+localhostアクセスでは、Tailscale利用者ヘッダーがないため `.env` のローカルオーナーを利用します。
 
-## データの保存場所
+## 利用者識別
 
-アプリのデータの正本は、アプリを動かしているホストPCです。
-
-```text
-ホストPC
-  |
-  +-- Python / Flask
-  +-- SQLite
-  |     +-- data/app.db
-  +-- HTML / CSS / JavaScript
-  |
-  +-- Tailscale Serve
-         |
-         +-- 他のPC / スマートフォン
+```mermaid
+flowchart TD
+    R["Request"] --> L{"remote_addr is loopback?"}
+    L -->|"No"| N["Identityなし"]
+    L -->|"Yes"| H{"Tailscale-User-Loginあり?"}
+    H -->|"Yes"| T["Tailscale identity"]
+    H -->|"No"| O["Local owner"]
+    T --> U["users table"]
+    O --> U
 ```
 
-`data/` はGitの管理対象外になっています。そのため、GitHubへソースコードをpushしてもSQLiteの実データは通常アップロードされません。
+Tailscale利用者ヘッダーはloopback経由のときだけ信用します。詳細は [AUTH-CRUD.md](AUTH-CRUD.md) と [SECURITY.md](SECURITY.md) を参照してください。
 
-## この構成が向いている規模
+## データモデル
 
-このテンプレートは、**1台のホストPCで動かす個人・家庭・小規模チーム向けWebアプリ**を想定しています。
+サンプルは `users` と `items` の2テーブルです。
 
-SQLiteは、1つのアプリケーションがデータベースファイルを管理し、書き込みが極端に集中しない用途に適しています。
+```mermaid
+erDiagram
+    USERS ||--o{ ITEMS : owns
+    USERS {
+      integer id PK
+      text login UK
+      text display_name
+      text identity_source
+    }
+    ITEMS {
+      integer id PK
+      integer owner_user_id FK
+      text title
+      text body
+      text status
+    }
+```
 
-一方で、将来的に次のような要件が出てきた場合は構成の見直しを検討してください。
+独自アプリでは `items` を置き換えますが、利用者ごとのデータなら所有者IDを持たせ、Service / SQLで認可する考え方を維持します。
 
-- 複数台のサーバーから同じDBへ同時接続したい
-- 非常に多くの利用者が同時に更新する
-- 大規模なWebサービスとして公開する
-- 高可用性やDBサーバーの冗長化が必要
+## フォルダー構成
 
-その場合は、SQLiteファイルをネットワーク共有するのではなく、PostgreSQLなどのクライアント／サーバー型データベースへの移行が適しています。
+```text
+app/
+├─ __init__.py       Flask初期化 / current_user
+├─ auth.py           Identity解決
+├─ config.py         環境設定
+├─ csrf.py           CSRF
+├─ db.py             SQLite接続 / users同期
+├─ routes.py         画面 / API
+├─ schema.sql        初期Schema
+├─ security.py       Security headers
+├─ services/         業務処理
+├─ templates/        HTML
+└─ static/           CSS / JavaScript
 
-## 設計の考え方
+docs/                目的別ドキュメント
+github/              Ruleset JSON
+scripts/             bootstrap / start / Tailscale / GitHub setup
+tests/               pytest
+```
 
-このテンプレートで重視しているのは、**必要以上に複雑な構成にしないこと**です。
+## 残す共通基盤
 
-小規模なクローズドWebアプリであれば、Python + SQLite + Tailscaleという比較的少ない構成要素だけで、データ保存・Web画面・外部端末からの安全なアクセスまで実現できます。
+```mermaid
+flowchart TD
+    K["原則残す"] --> K1["127.0.0.1 bind"]
+    K --> K2["Tailscale Serve"]
+    K --> K3["Identity / Authorization"]
+    K --> K4["CSRF / Security headers"]
+    K --> K5["SQLite connection"]
+    K --> K6["pytest / CI"]
+```
+
+- localhost限定
+- Tailscaleを入口にする設計
+- Tailscaleヘッダーの信頼条件
+- `g.current_user`
+- SQLでの所有者チェック
+- CSRF
+- セキュリティヘッダー
+- SQLite接続管理
+- GitHub CI
+
+## 置き換える業務部分
+
+- `items` Schema
+- `app/services/items.py`
+- 業務Route / API
+- Templates / CSS / JavaScript
+- 業務テスト
+- アプリ名 / `.env.example`
+
+詳細は [CUSTOMIZING.md](CUSTOMIZING.md) を参照してください。
+
+## データの正本
+
+```mermaid
+flowchart LR
+    G["GitHub"] -->|"source only"| H["Host PC"]
+    H --> A["Application source"]
+    H --> D[("data/app.db")]
+    H --> E[".env"]
+```
+
+GitHubにはソースを保存します。SQLite実データと `.env` はホストPC側の正本です。
+
+## 想定する規模
+
+向いている用途:
+
+- 個人
+- 家庭
+- 小規模チーム
+- 社内の小さな補助ツール
+- 1台のホストPCで十分なアプリ
+
+構成見直しを検討する要件:
+
+- 複数サーバーから同じDBへ同時接続
+- 大量の同時書き込み
+- インターネット一般公開
+- 高可用性 / 冗長化
+- 大規模な組織認証基盤
+
+その場合はPostgreSQL等へのDB移行や、一般公開を前提としたWeb構成を別途設計します。
+
+## 関連ドキュメント
+
+- [SQLITE-SETUP.md](SQLITE-SETUP.md)
+- [TAILSCALE-SETUP.md](TAILSCALE-SETUP.md)
+- [AUTH-CRUD.md](AUTH-CRUD.md)
+- [SECURITY.md](SECURITY.md)

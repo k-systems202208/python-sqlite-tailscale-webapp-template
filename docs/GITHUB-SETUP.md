@@ -1,74 +1,85 @@
-# GitHub初期設定ガイド
+# GitHub Setup
 
-> **この文書の役割：テンプレートから作ったリポジトリへ推奨Git運用を設定する**
->
-> main保護、Pull Request必須、CI必須、Squash Merge、Merge後の作業ブランチ自動削除を、できるだけ簡単に設定する方法を説明します。
+このドキュメントは、このテンプレートから作成したリポジトリへ、推奨するmain保護・Pull Request・CI・Squash Merge設定を適用する方法を説明します。
 
----
+## 全体像
+
+```mermaid
+flowchart LR
+    C["Clone"] --> A["gh auth login"]
+    A --> S["setup-github.ps1"]
+    S --> R["Protect main Ruleset"]
+    S --> M["Repository merge settings"]
+    R --> V["Verification"]
+    M --> V
+```
 
 ## 1. 推奨方法
 
-Windowsでは、リポジトリをCloneしたあとに次を実行します。
+Windows PowerShellで、Cloneしたリポジトリのルートから実行します。
 
 ```powershell
 .\scripts\setup-github.ps1
 ```
 
-このスクリプトはGitHub CLI（`gh`）を使い、現在のClone先リポジトリを自動判定して設定します。
-
-対象を明示する場合：
+対象を明示する場合:
 
 ```powershell
 .\scripts\setup-github.ps1 -Repository owner/repository
 ```
 
----
+## 2. GitHub CLI
 
-## 2. 事前準備
-
-### GitHub CLIが入っているか確認
+確認:
 
 ```powershell
 gh --version
 ```
 
-見つからない場合、Windowsで `winget` を利用できる環境では次で導入できます。
+未導入で `winget` が使える場合:
 
 ```powershell
 winget install --id GitHub.cli
 ```
 
-導入後にGitHubへログインします。
+GitHubへログイン:
 
 ```powershell
 gh auth login
 ```
 
-対象リポジトリの設定変更には、そのリポジトリの管理権限が必要です。
-
----
+対象リポジトリのRuleset / Repository設定変更には管理権限が必要です。
 
 ## 3. 自動設定される内容
 
 ### Protect main Ruleset
 
-`github/protect-main.ruleset.json` を使って、Default branch（通常は `main`）へ次を設定します。
+`github/protect-main.ruleset.json` を使い、Default branchへ次を設定します。
+
+```mermaid
+flowchart TD
+    R["Protect main"] --> P["Pull Request required"]
+    R --> C["Required status checks"]
+    R --> L["Linear history"]
+    R --> F["Force push禁止"]
+    R --> D["Branch削除禁止"]
+    R --> S["Squash only"]
+    R --> V["Conversation resolution"]
+```
 
 - branch削除禁止
 - force push禁止
 - linear history必須
 - Pull Request経由必須
 - Required approvals = 0
-- 未解決Conversationがある場合はMerge不可
-- Merge方式はSquashのみ
-- CI `test (3.11)` 必須
-- CI `test (3.12)` 必須
-- CI `test (3.13)` 必須
+- Conversation resolution必須
+- Squash Mergeのみ
+- `test (3.11)` 必須
+- `test (3.12)` 必須
+- `test (3.13)` 必須
 - Bypassなし
 
 ### Repository設定
-
-次も自動設定します。
 
 - Allow squash merging = ON
 - Allow merge commits = OFF
@@ -77,35 +88,44 @@ gh auth login
 - Automatically delete head branches = ON
 - Always suggest updating pull request branches = ON
 
----
+## 4. 初回実行と再実行
 
-## 4. 既にProtect mainがある場合
+スクリプトは同名の `Protect main` Rulesetを検索します。
 
-同名の `Protect main` Rulesetが存在する場合、スクリプトは重複作成しません。
-
-```text
-Protect mainなし
-   ↓
-新規作成
-
-Protect mainあり
-   ↓
-JSON定義で更新
+```mermaid
+flowchart TD
+    A["setup-github.ps1"] --> E{"Protect main exists?"}
+    E -->|"No"| C["POST: Create"]
+    E -->|"Yes"| U["PUT: Update existing ID"]
+    C --> V["Verify"]
+    U --> V
 ```
 
-そのため、テンプレート側の推奨設定が変わった場合にも、再度スクリプトを実行して設定を揃えられます。
+そのため、同じスクリプトを再実行してもRulesetを重複作成せず、既存Rulesetを更新します。
 
----
+## 5. Windows PowerShell 5.1対応
 
-## 5. 手動でRulesetをImportする場合
+`setup-github.ps1` はWindows PowerShell 5.1での利用を想定し、UTF-8 BOM付きで管理しています。
 
-GitHub CLIを使わない場合は、次のJSONを利用できます。
+CIでは次を検査します。
+
+- PowerShell構文
+- UTF-8 BOM
+- Windows PowerShell 5.1での初回Ruleset作成
+- 2回目実行で既存Ruleset更新
+- Ruleset重複なし
+
+このスクリプトを変更した場合、上記スモークテストも成功することを確認します。
+
+## 6. 手動Import
+
+GitHub CLIを使わない場合は次のJSONを利用できます。
 
 ```text
 github/protect-main.ruleset.json
 ```
 
-GitHubの対象リポジトリで、おおむね次の順に開きます。
+GitHub画面の目安:
 
 ```text
 Settings
@@ -119,9 +139,7 @@ New ruleset
 Import a ruleset
 ```
 
-GitHubの画面構成は変更される可能性があります。
-
-JSONをImportしただけでは、Merge方式やMerge後のbranch自動削除などリポジトリ全体の設定までは変更されません。手動の場合は `Settings -> General -> Pull Requests` で次も確認します。
+Ruleset JSONだけではリポジトリ全体のMerge設定までは変更されません。手動の場合は `Settings` → `General` → `Pull Requests` も確認します。
 
 ```text
 Allow merge commits                 OFF
@@ -131,11 +149,9 @@ Allow auto-merge                    OFF
 Automatically delete head branches  ON
 ```
 
----
+## 7. CI名との関係
 
-## 6. CI名を変更した場合
-
-このテンプレートのRulesetは次のGitHub Actions jobを必須にしています。
+Rulesetは次のStatus Check名を必須にしています。
 
 ```text
 test (3.11)
@@ -143,17 +159,52 @@ test (3.12)
 test (3.13)
 ```
 
-`.github/workflows/ci.yml` のmatrixやjob名を変更した場合は、`github/protect-main.ruleset.json` 側も合わせて変更してください。
+`.github/workflows/ci.yml` のjob名やPython matrixを変更した場合は、`github/protect-main.ruleset.json` も同じPRで更新します。
 
-CI名だけを変更してRulesetを更新しないと、CIが成功していてもGitHubが必須チェックを見つけられずMergeできなくなる可能性があります。
+```mermaid
+flowchart LR
+    W["ci.yml job name"] --> R["Ruleset status context"]
+    R --> M["Merge allowed"]
+```
 
----
+名前がずれるとCIが成功していても必須チェックを解決できず、Mergeできなくなる可能性があります。
 
-## 7. エラーになった場合
+## 8. 設定後の確認
+
+スクリプトの出力でRepository設定とRulesetを確認します。
+
+例:
+
+```text
+Repository settings:
+{"allow_merge_commit":false,"allow_rebase_merge":false,"allow_squash_merge":true,...}
+
+Ruleset:
+{"id":123456,"name":"Protect main","enforcement":"active"}
+```
+
+GitHub側でも `Settings` → `Rules` → `Rulesets` から `Protect main` がActiveであることを確認できます。
+
+## 9. 標準開発フロー
+
+```mermaid
+flowchart LR
+    I["日本語Issue"] --> B["Issue番号入りBranch"]
+    B --> W["Work / pytest"]
+    W --> P["Pull Request"]
+    P --> C["CI 3 Python versions"]
+    C --> R["Conversation resolved"]
+    R --> M["Squash Merge"]
+    M --> D["Issue Close / Branch delete"]
+```
+
+詳細は [DEVELOPMENT.md](DEVELOPMENT.md) を参照してください。
+
+## 10. よくあるエラー
 
 ### `gh` が見つからない
 
-GitHub CLIを導入してください。
+GitHub CLIをインストールします。
 
 ### GitHubへログインしていない
 
@@ -163,36 +214,22 @@ gh auth login
 
 ### 管理権限がない
 
-Rulesetの作成・更新には対象リポジトリの管理権限が必要です。リポジトリ所有者または管理者へ依頼してください。
+対象リポジトリの管理権限が必要です。
 
-### Ruleset APIでエラーになる
+### `Resource not accessible by integration`
 
-GitHubプラン、所有者種別、権限などによってRulesetsの利用条件が異なる場合があります。その場合は手動ImportまたはGitHub画面から設定してください。
+ChatGPT等のGitHub Appから操作する場合、そのAppのインストール対象へ対象リポジトリが含まれているか確認します。
 
----
+### Ruleset APIが利用できない
 
-## 8. 設定後の標準運用
+GitHubのプラン・所有者種別・権限等を確認し、必要なら手動Importを利用します。
 
-```text
-日本語Issue
-   ↓
-Issue番号入りBranch
-   ↓
-実装・テスト
-   ↓
-Commit / Push
-   ↓
-Pull Request
-   ↓
-CI 3環境成功
-   ↓
-Conversation解決
-   ↓
-Squash Merge
-   ↓
-Issue自動Close
-   ↓
-作業Branch自動削除
-```
+### CI名変更後にMergeできない
 
-GitHubの設定を自動化しても、IssueやPRの内容確認そのものは省略しません。
+RulesetのRequired Status Check名と `.github/workflows/ci.yml` の実際のJob名を揃えます。
+
+## 11. 関連ドキュメント
+
+- [../GETTING-STARTED.md](../GETTING-STARTED.md)
+- [DEVELOPMENT.md](DEVELOPMENT.md)
+- [DEPLOYMENT.md](DEPLOYMENT.md)
