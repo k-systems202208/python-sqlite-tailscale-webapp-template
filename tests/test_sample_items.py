@@ -1,11 +1,11 @@
 import sqlite3
 
 import pytest
+from conftest import csrf_for, tailscale_headers
 
 import app.features as features
 from app import create_app
 from app.db import _migration_files, get_db
-from conftest import csrf_for, tailscale_headers
 
 pytestmark = pytest.mark.skipif(
     "items" not in features.feature_names(),
