@@ -15,14 +15,15 @@ assignees: ''
 
 ## 影響範囲
 - 対象機能：
-- DB変更：あり / なし
+- Migration / DB変更：あり / なし
+- Backup / Restoreへの影響：あり / なし
 - `.env.example` 変更：あり / なし
-- `requirements` 変更：あり / なし
+- `requirements` / `constraints` 変更：あり / なし
 - 認証・セキュリティへの影響：あり / なし
 
 ## 完了条件
 - [ ] 実装または修正が完了している
 - [ ] 必要なテストが追加・更新されている
-- [ ] ローカルテストが成功している
+- [ ] `scripts/check.ps1` / `scripts/check.sh` または同等の品質確認が成功している
 - [ ] README / 関連docsの更新要否を確認している
 - [ ] PRを作成し、CI成功後にmainへ取り込める状態になっている
