@@ -9,9 +9,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_initial_migration_is_applied_once(app):
     with app.app_context():
-        rows = get_db().execute(
-            "SELECT version, name FROM schema_migrations ORDER BY version"
-        ).fetchall()
+        rows = (
+            get_db()
+            .execute("SELECT version, name FROM schema_migrations ORDER BY version")
+            .fetchall()
+        )
         assert [(row["version"], row["name"]) for row in rows] == [(1, "initial")]
 
         apply_migrations()
@@ -22,9 +24,7 @@ def test_initial_migration_is_applied_once(app):
 
 def test_existing_schema_is_baselined_without_data_loss(tmp_path):
     database = tmp_path / "existing.db"
-    migration_sql = (ROOT / "app" / "migrations" / "001_initial.sql").read_text(
-        encoding="utf-8"
-    )
+    migration_sql = (ROOT / "app" / "migrations" / "001_initial.sql").read_text(encoding="utf-8")
 
     with sqlite3.connect(database) as connection:
         connection.executescript(migration_sql)
