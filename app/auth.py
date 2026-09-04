@@ -49,6 +49,8 @@ def resolve_identity() -> Identity | None:
             )
 
         if current_app.config.get("ALLOW_ANONYMOUS"):
-            return Identity(login="anonymous@localhost", display_name="Anonymous", source="anonymous")
+            return Identity(
+                login="anonymous@localhost", display_name="Anonymous", source="anonymous"
+            )
 
     return None
