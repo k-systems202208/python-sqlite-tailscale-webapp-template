@@ -24,6 +24,59 @@ function Invoke-GhText {
     return ($output -join [Environment]::NewLine).Trim()
 }
 
+function ConvertFrom-JsonItems {
+    param([string]$Json)
+
+    if ([string]::IsNullOrWhiteSpace($Json)) {
+        return @()
+    }
+
+    $parsed = $Json | ConvertFrom-Json
+    if ($null -eq $parsed) {
+        return @()
+    }
+
+    return @($parsed)
+}
+
+function Get-ObjectPropertyValue {
+    param(
+        [object]$Object,
+        [string]$Name
+    )
+
+    if ($null -eq $Object) {
+        return $null
+    }
+
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property) {
+        return $null
+    }
+
+    return $property.Value
+}
+
+function Find-RulesetByName {
+    param(
+        [object[]]$Rulesets,
+        [string]$Name
+    )
+
+    foreach ($ruleset in @($Rulesets)) {
+        if ($null -eq $ruleset) {
+            continue
+        }
+
+        $rulesetName = Get-ObjectPropertyValue -Object $ruleset -Name "name"
+        if ([string]$rulesetName -eq $Name) {
+            return $ruleset
+        }
+    }
+
+    return $null
+}
+
 Write-Host "=== GitHub repository setup ===" -ForegroundColor Cyan
 
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
@@ -117,14 +170,20 @@ Write-Host "  Squash Merge only / Auto delete head branches: OK" -ForegroundColo
 
 Write-Host "[2/3] Protect main Ruleset" -ForegroundColor Yellow
 try {
-    $existingRulesetId = Invoke-GhText @(
+    $rulesetsJson = Invoke-GhText @(
         "api",
         "-H", "X-GitHub-Api-Version: 2026-03-10",
-        "repos/$Repository/rulesets",
-        "--jq", ".[] | select(.name == `"$RulesetName`") | .id"
+        "repos/$Repository/rulesets"
     )
+    $rulesets = @(ConvertFrom-JsonItems -Json $rulesetsJson)
+    $existingRuleset = Find-RulesetByName -Rulesets $rulesets -Name $RulesetName
 
-    if (-not [string]::IsNullOrWhiteSpace($existingRulesetId)) {
+    if ($null -ne $existingRuleset) {
+        $existingRulesetId = [string](Get-ObjectPropertyValue -Object $existingRuleset -Name "id")
+        if ([string]::IsNullOrWhiteSpace($existingRulesetId)) {
+            throw "既存Ruleset '$RulesetName' にIDがありません。"
+        }
+
         Write-Host "  Existing Ruleset found (ID: $existingRulesetId). Updating..."
         Invoke-GhText @(
             "api",
@@ -165,12 +224,23 @@ try {
         '{allow_squash_merge,allow_merge_commit,allow_rebase_merge,delete_branch_on_merge,allow_update_branch}'
     )
 
-    $verifiedRuleset = Invoke-GhText @(
+    $rulesetsJson = Invoke-GhText @(
         "api",
         "-H", "X-GitHub-Api-Version: 2026-03-10",
-        "repos/$Repository/rulesets",
-        "--jq", ".[] | select(.name == `"$RulesetName`") | {id,name,enforcement}"
+        "repos/$Repository/rulesets"
     )
+    $rulesets = @(ConvertFrom-JsonItems -Json $rulesetsJson)
+    $verifiedRuleset = Find-RulesetByName -Rulesets $rulesets -Name $RulesetName
+
+    if ($null -eq $verifiedRuleset) {
+        throw "設定後にRuleset '$RulesetName' を確認できませんでした。"
+    }
+
+    $verifiedRulesetSummary = [ordered]@{
+        id          = Get-ObjectPropertyValue -Object $verifiedRuleset -Name "id"
+        name        = Get-ObjectPropertyValue -Object $verifiedRuleset -Name "name"
+        enforcement = Get-ObjectPropertyValue -Object $verifiedRuleset -Name "enforcement"
+    } | ConvertTo-Json -Compress
 }
 catch {
     Stop-WithMessage "設定後の確認に失敗しました。`n$($_.Exception.Message)"
@@ -181,7 +251,7 @@ Write-Host "Repository settings:" -ForegroundColor Cyan
 Write-Host $repoSettings
 Write-Host ""
 Write-Host "Ruleset:" -ForegroundColor Cyan
-Write-Host $verifiedRuleset
+Write-Host $verifiedRulesetSummary
 Write-Host ""
 Write-Host "GitHub初期設定が完了しました。" -ForegroundColor Green
 Write-Host "以降は 日本語Issue -> Issue番号入りBranch -> PR -> CI -> Squash Merge の運用を使用してください。"

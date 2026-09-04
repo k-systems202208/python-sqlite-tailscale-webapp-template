@@ -47,3 +47,113 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m pytest
+
+  windows-powershell-51:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Smoke test setup-github.ps1 on Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          if ($PSVersionTable.PSVersion.Major -ne 5) {
+            throw "This test must run on Windows PowerShell 5.1."
+          }
+
+          $global:MockRulesetExists = $false
+          $global:MockPostCount = 0
+          $global:MockPutCount = 0
+          $global:LASTEXITCODE = 0
+
+          function global:gh {
+            $arguments = @($args)
+            $global:LASTEXITCODE = 0
+
+            if (
+              $arguments.Count -ge 2 -and
+              $arguments[0] -eq "auth" -and
+              $arguments[1] -eq "status"
+            ) {
+              return
+            }
+
+            if ($arguments.Count -eq 0 -or $arguments[0] -ne "api") {
+              throw "Unexpected gh call: $($arguments -join ' ')"
+            }
+
+            $endpoint = @(
+              $arguments | Where-Object {
+                $_ -is [string] -and $_ -like "repos/*"
+              }
+            ) | Select-Object -Last 1
+
+            if ($endpoint -eq "repos/mock-owner/mock-repo") {
+              if ($arguments -contains "--jq") {
+                $jqIndex = [Array]::IndexOf($arguments, "--jq")
+                $jq = [string]$arguments[$jqIndex + 1]
+
+                if ($jq -eq ".permissions.admin") {
+                  return "true"
+                }
+
+                if ($jq -eq '{allow_squash_merge,allow_merge_commit,allow_rebase_merge,delete_branch_on_merge,allow_update_branch}') {
+                  return '{"allow_squash_merge":true,"allow_merge_commit":false,"allow_rebase_merge":false,"delete_branch_on_merge":true,"allow_update_branch":true}'
+                }
+              }
+
+              return '{}'
+            }
+
+            if ($endpoint -eq "repos/mock-owner/mock-repo/rulesets") {
+              if ($arguments -contains "--method") {
+                $methodIndex = [Array]::IndexOf($arguments, "--method")
+                $method = [string]$arguments[$methodIndex + 1]
+
+                if ($method -eq "POST") {
+                  $global:MockRulesetExists = $true
+                  $global:MockPostCount++
+                  return '{"id":123,"name":"Protect main","enforcement":"active"}'
+                }
+              }
+
+              if ($global:MockRulesetExists) {
+                return '[{"id":123,"name":"Protect main","enforcement":"active"}]'
+              }
+
+              return '[]'
+            }
+
+            if ($endpoint -eq "repos/mock-owner/mock-repo/rulesets/123") {
+              if ($arguments -contains "--method") {
+                $methodIndex = [Array]::IndexOf($arguments, "--method")
+                $method = [string]$arguments[$methodIndex + 1]
+
+                if ($method -eq "PUT") {
+                  $global:MockPutCount++
+                  return '{"id":123,"name":"Protect main","enforcement":"active"}'
+                }
+              }
+            }
+
+            throw "Unexpected gh call: $($arguments -join ' ')"
+          }
+
+          & .\scripts\setup-github.ps1 -Repository "mock-owner/mock-repo"
+
+          if (-not $global:MockRulesetExists) {
+            throw "First run did not create the Ruleset."
+          }
+          if ($global:MockPostCount -ne 1) {
+            throw "First run must create exactly one Ruleset."
+          }
+          if ($global:MockPutCount -ne 0) {
+            throw "First run must not update an existing Ruleset."
+          }
+
+          & .\scripts\setup-github.ps1 -Repository "mock-owner/mock-repo"
+
+          if ($global:MockPostCount -ne 1) {
+            throw "Second run created a duplicate Ruleset."
+          }
+          if ($global:MockPutCount -ne 1) {
+            throw "Second run did not update the existing Ruleset exactly once."
+          }
