@@ -100,6 +100,17 @@ jobs:
           --cov-report=term-missing
           --cov-fail-under=80
 
+      - name: Sampleless template smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf app/features/items
+          python -m pytest \
+            --cov=app \
+            --cov=scripts.db_tools \
+            --cov-report=term-missing \
+            --cov-fail-under=80
+
   windows-powershell-51:
     runs-on: windows-latest
     timeout-minutes: 15
