@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, g
+from flask import Flask, g, request
 
 from .auth import resolve_identity
 from .config import load_settings
@@ -9,6 +9,8 @@ from .csrf import install_csrf
 from .db import close_db, ensure_user, init_db
 from .routes import bp
 from .security import install_security_headers
+
+HEALTH_PATHS = {"/healthz", "/readyz"}
 
 
 def create_app(test_config=None):
@@ -45,6 +47,11 @@ def create_app(test_config=None):
 
     @app.before_request
     def load_current_user():
+        if request.path in HEALTH_PATHS:
+            g.identity = None
+            g.current_user = None
+            return
+
         identity = resolve_identity()
         g.identity = identity
         g.current_user = ensure_user(identity) if identity else None
