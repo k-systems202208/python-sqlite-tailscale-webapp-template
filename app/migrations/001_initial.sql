@@ -1,3 +1,8 @@
+-- Common core schema.
+-- Historical note: template versions before Issue #21 also created the optional
+-- items sample in migration version 1. Existing databases keep that table and
+-- migration 002 records the separated sample without data loss.
+
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     login TEXT NOT NULL UNIQUE,
@@ -6,17 +11,3 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-
-CREATE TABLE IF NOT EXISTS items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    owner_user_id INTEGER NOT NULL,
-    title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 200),
-    body TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'done')),
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(owner_user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_items_owner_updated
-    ON items(owner_user_id, updated_at DESC, id DESC);
