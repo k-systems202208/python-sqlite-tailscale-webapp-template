@@ -13,39 +13,21 @@ flowchart LR
     F --> R["routes"]
     R --> S["services"]
     S --> DB["db.py"]
-    DB --> Q[("SQLite\ndata/app.db")]
+    DB --> M["Migration runner"]
+    M --> Q[("SQLite\ndata/app.db")]
     F --> UI["Jinja / CSS / JavaScript"]
 ```
 
-ホストPC自身から利用する場合はTailscale Serveを経由せず、ブラウザから直接 `http://127.0.0.1:8000` を開きます。
+ホストPC自身から利用する場合は、ブラウザから直接 `http://127.0.0.1:8000` を開きます。
 
-## 各レイヤーの役割
+## 各レイヤー
 
-```mermaid
-flowchart TD
-    N["Network"] --> P["Waitress / Flask"]
-    P --> ID["Identity / Security"]
-    ID --> RT["Routes"]
-    RT --> SV["Services"]
-    SV --> DB["SQLite"]
-    P --> UI["Templates / Static"]
-```
-
-### Tailscale Serve
-
-別端末からの安全な入口です。ルーターのポート開放やFlaskの外部公開を行わず、tailnet内からHTTPSでアクセスします。
-
-### Waitress
-
-Flaskアプリを実際に待ち受けるWebサーバーです。このテンプレートでは `127.0.0.1` のみにbindします。
-
-### Flask
-
-HTTPリクエスト、利用者情報、画面・API、CSRF、セキュリティヘッダーなどを担当します。
-
-### SQLite
-
-アプリデータを `data/app.db` に保存します。DBサーバーは不要です。接続は `app/db.py` でリクエスト単位に管理します。
+- **Tailscale Serve**: 別端末からのHTTPS入口
+- **Waitress**: `127.0.0.1` だけでFlaskを待ち受ける
+- **Flask**: Route / Identity / CSRF / Security headers
+- **Service**: 業務処理とSQL
+- **SQLite**: `data/app.db` にデータ保存
+- **Migration runner**: `app/migrations/*.sql` の未適用分だけ実行
 
 ## リクエストの流れ
 
@@ -57,14 +39,44 @@ sequenceDiagram
     participant D as SQLite
 
     B->>T: HTTPS request
-    T->>F: localhost request + identity headers
+    T->>F: localhost + identity headers
     F->>F: resolve_identity / ensure_user
     F->>D: owner_user_id条件付きSQL
     D-->>F: current user's rows
     F-->>B: HTML / JSON
 ```
 
-localhostアクセスでは、Tailscale利用者ヘッダーがないため `.env` のローカルオーナーを利用します。
+localhostアクセスではTailscale Headerがないため `.env` のローカルオーナーを利用します。
+
+## 起動とMigration
+
+アプリ生成時に `init_db()` が未適用Migrationを確認します。
+
+```mermaid
+flowchart LR
+    S["create_app"] --> I["init_db"]
+    I --> M["schema_migrations"]
+    M --> A["apply pending SQL"]
+    A --> F["Flask ready"]
+```
+
+初期Migration:
+
+```text
+app/migrations/001_initial.sql
+```
+
+Migration SQLとversion記録は同じtransactionで扱い、適用済みversionは再実行しません。
+
+## Health / Readiness
+
+```mermaid
+flowchart LR
+    H["/healthz"] --> P["Process is responding"]
+    R["/readyz"] --> D["SQLite SELECT 1"]
+```
+
+`/healthz` と `/readyz` は利用者登録処理から分離しており、監視アクセスだけで `users` に不要なレコードを作りません。
 
 ## 利用者識別
 
@@ -75,15 +87,13 @@ flowchart TD
     L -->|"Yes"| H{"Tailscale-User-Loginあり?"}
     H -->|"Yes"| T["Tailscale identity"]
     H -->|"No"| O["Local owner"]
-    T --> U["users table"]
+    T --> U["users"]
     O --> U
 ```
 
-Tailscale利用者ヘッダーはloopback経由のときだけ信用します。詳細は [AUTH-CRUD.md](AUTH-CRUD.md) と [SECURITY.md](SECURITY.md) を参照してください。
+Tailscale Identity Headerはloopback経由のときだけ信用します。
 
 ## データモデル
-
-サンプルは `users` と `items` の2テーブルです。
 
 ```mermaid
 erDiagram
@@ -101,9 +111,14 @@ erDiagram
       text body
       text status
     }
+    SCHEMA_MIGRATIONS {
+      integer version PK
+      text name
+      text applied_at
+    }
 ```
 
-独自アプリでは `items` を置き換えますが、利用者ごとのデータなら所有者IDを持たせ、Service / SQLで認可する考え方を維持します。
+独自アプリでは `items` を置き換えますが、利用者別データは所有者IDを持たせ、SQLで認可します。
 
 ## フォルダー構成
 
@@ -111,90 +126,105 @@ erDiagram
 app/
 ├─ __init__.py       Flask初期化 / current_user
 ├─ auth.py           Identity解決
-├─ config.py         環境設定
+├─ config.py         環境設定 / LOG_LEVEL
 ├─ csrf.py           CSRF
-├─ db.py             SQLite接続 / users同期
-├─ routes.py         画面 / API
-├─ schema.sql        初期Schema
+├─ db.py             SQLite接続 / Migration / users同期
+├─ migrations/       番号付きSQL Migration
+├─ routes.py         画面 / API / health / ready
 ├─ security.py       Security headers
 ├─ services/         業務処理
 ├─ templates/        HTML
 └─ static/           CSS / JavaScript
 
+scripts/
+├─ bootstrap*        開発環境
+├─ bootstrap-runtime* 稼働環境
+├─ check*            Ruff / pytest / Coverage
+├─ db_tools.py       Backup / Restore / integrity
+├─ start*            アプリ起動
+├─ tailscale-*       Tailscale Serve
+└─ setup-github.ps1  GitHub初期設定
+
+tests/               pytest
 docs/                目的別ドキュメント
 github/              Ruleset JSON
-scripts/             bootstrap / start / Tailscale / GitHub setup
-tests/               pytest
 ```
+
+## 品質基盤
+
+```mermaid
+flowchart LR
+    C["Code"] --> R["Ruff lint / format"]
+    R --> T["pytest + Coverage"]
+    T --> P11["Python 3.11"]
+    T --> P12["3.12"]
+    T --> P13["3.13"]
+    T --> P14["3.14"]
+    C --> W["Windows PowerShell 5.1"]
+```
+
+- `scripts/check.ps1` / `check.sh` をローカル品質ゲートにする
+- Coverage最低80%
+- `constraints.txt` でCI確認済み依存バージョンを固定
+- Dependabotでpip / GitHub Actionsを定期確認
+
+## Backup / Restore
+
+```mermaid
+flowchart LR
+    DB[("data/app.db")] -->|"SQLite backup API"| B[("backups/*.db")]
+    B --> C["quick_check"]
+    B --> R["Restore"]
+    R --> S["pre-restore safety backup"]
+```
+
+実データの正本はホストPCです。GitHubはSQLiteデータのBackupではありません。
 
 ## 残す共通基盤
 
-```mermaid
-flowchart TD
-    K["原則残す"] --> K1["127.0.0.1 bind"]
-    K --> K2["Tailscale Serve"]
-    K --> K3["Identity / Authorization"]
-    K --> K4["CSRF / Security headers"]
-    K --> K5["SQLite connection"]
-    K --> K6["pytest / CI"]
-```
-
-- localhost限定
-- Tailscaleを入口にする設計
-- Tailscaleヘッダーの信頼条件
+- `127.0.0.1` bind
+- Tailscale Serve
+- Identity Headerの信頼条件
 - `g.current_user`
 - SQLでの所有者チェック
-- CSRF
-- セキュリティヘッダー
-- SQLite接続管理
-- GitHub CI
+- CSRF / Security headers
+- Migration / SQLite接続
+- Backup / Restore
+- Ruff / pytest / Coverage
+- GitHub CI / Ruleset
 
 ## 置き換える業務部分
 
-- `items` Schema
+- `items` 初期Schema / 後続Migration
 - `app/services/items.py`
 - 業務Route / API
 - Templates / CSS / JavaScript
 - 業務テスト
 - アプリ名 / `.env.example`
 
-詳細は [CUSTOMIZING.md](CUSTOMIZING.md) を参照してください。
-
-## データの正本
-
-```mermaid
-flowchart LR
-    G["GitHub"] -->|"source only"| H["Host PC"]
-    H --> A["Application source"]
-    H --> D[("data/app.db")]
-    H --> E[".env"]
-```
-
-GitHubにはソースを保存します。SQLite実データと `.env` はホストPC側の正本です。
-
 ## 想定する規模
 
 向いている用途:
 
-- 個人
-- 家庭
+- 個人・家庭
 - 小規模チーム
 - 社内の小さな補助ツール
 - 1台のホストPCで十分なアプリ
 
 構成見直しを検討する要件:
 
-- 複数サーバーから同じDBへ同時接続
+- 複数サーバーから同じDBへ接続
 - 大量の同時書き込み
 - インターネット一般公開
 - 高可用性 / 冗長化
-- 大規模な組織認証基盤
 
-その場合はPostgreSQL等へのDB移行や、一般公開を前提としたWeb構成を別途設計します。
+その場合はPostgreSQL等へのDB移行や公開Web構成を別途設計します。
 
 ## 関連ドキュメント
 
 - [SQLITE-SETUP.md](SQLITE-SETUP.md)
 - [TAILSCALE-SETUP.md](TAILSCALE-SETUP.md)
 - [AUTH-CRUD.md](AUTH-CRUD.md)
+- [DEVELOPMENT.md](DEVELOPMENT.md)
+- [DEPLOYMENT.md](DEPLOYMENT.md)
 - [SECURITY.md](SECURITY.md)
