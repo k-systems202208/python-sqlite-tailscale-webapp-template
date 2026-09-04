@@ -1,6 +1,6 @@
 # GitHub Setup
 
-このドキュメントは、このテンプレートから作成したリポジトリへ、推奨するmain保護・Pull Request・CI・Squash Merge設定を適用する方法を説明します。
+このドキュメントは、このテンプレートから作成したリポジトリへmain保護・Pull Request・CI・Squash Merge設定を適用する方法を説明します。
 
 ## 全体像
 
@@ -16,7 +16,7 @@ flowchart LR
 
 ## 1. 推奨方法
 
-Windows PowerShellで、Cloneしたリポジトリのルートから実行します。
+Windows PowerShellでCloneしたリポジトリから実行します。
 
 ```powershell
 .\scripts\setup-github.ps1
@@ -30,42 +30,22 @@ Windows PowerShellで、Cloneしたリポジトリのルートから実行しま
 
 ## 2. GitHub CLI
 
-確認:
-
 ```powershell
 gh --version
+gh auth login
 ```
 
-未導入で `winget` が使える場合:
+GitHub CLIが未導入で `winget` を利用できる場合:
 
 ```powershell
 winget install --id GitHub.cli
 ```
 
-GitHubへログイン:
+Ruleset / Repository設定変更には対象リポジトリの管理権限が必要です。
 
-```powershell
-gh auth login
-```
-
-対象リポジトリのRuleset / Repository設定変更には管理権限が必要です。
-
-## 3. 自動設定される内容
-
-### Protect main Ruleset
+## 3. Protect main Ruleset
 
 `github/protect-main.ruleset.json` を使い、Default branchへ次を設定します。
-
-```mermaid
-flowchart TD
-    R["Protect main"] --> P["Pull Request required"]
-    R --> C["Required status checks"]
-    R --> L["Linear history"]
-    R --> F["Force push禁止"]
-    R --> D["Branch削除禁止"]
-    R --> S["Squash only"]
-    R --> V["Conversation resolution"]
-```
 
 - branch削除禁止
 - force push禁止
@@ -74,12 +54,30 @@ flowchart TD
 - Required approvals = 0
 - Conversation resolution必須
 - Squash Mergeのみ
-- `test (3.11)` 必須
-- `test (3.12)` 必須
-- `test (3.13)` 必須
 - Bypassなし
 
-### Repository設定
+Required Status Check:
+
+```text
+test (3.11)
+test (3.12)
+test (3.13)
+test (3.14)
+windows-powershell-51
+```
+
+```mermaid
+flowchart TD
+    R["Protect main"] --> P["Pull Request"]
+    R --> P11["test 3.11"]
+    R --> P12["test 3.12"]
+    R --> P13["test 3.13"]
+    R --> P14["test 3.14"]
+    R --> W["Windows PowerShell 5.1"]
+    R --> S["Squash only / Linear history"]
+```
+
+## 4. Repository設定
 
 - Allow squash merging = ON
 - Allow merge commits = OFF
@@ -88,44 +86,69 @@ flowchart TD
 - Automatically delete head branches = ON
 - Always suggest updating pull request branches = ON
 
-## 4. 初回実行と再実行
-
-スクリプトは同名の `Protect main` Rulesetを検索します。
+## 5. 初回実行と再実行
 
 ```mermaid
 flowchart TD
     A["setup-github.ps1"] --> E{"Protect main exists?"}
-    E -->|"No"| C["POST: Create"]
-    E -->|"Yes"| U["PUT: Update existing ID"]
+    E -->|"No"| C["Create"]
+    E -->|"Yes"| U["Update existing ID"]
     C --> V["Verify"]
     U --> V
 ```
 
-そのため、同じスクリプトを再実行してもRulesetを重複作成せず、既存Rulesetを更新します。
+同名Rulesetが存在する場合は既存IDを更新し、重複作成しません。テンプレート側でRequired Checkが増えた場合も、スクリプトを再実行して設定を同期できます。
 
-## 5. Windows PowerShell 5.1対応
+## 6. CIとRulesetはセットで変更する
 
-`setup-github.ps1` はWindows PowerShell 5.1での利用を想定し、UTF-8 BOM付きで管理しています。
+`.github/workflows/ci.yml` のjob / matrixを変更した場合は、同じPRで `github/protect-main.ruleset.json` も確認します。
 
-CIでは次を検査します。
+```mermaid
+flowchart LR
+    W["ci.yml"] --> N["Actual check names"]
+    N --> J["protect-main.ruleset.json"]
+    J --> S["setup-github.ps1 reapply"]
+```
 
-- PowerShell構文
-- UTF-8 BOM
-- Windows PowerShell 5.1での初回Ruleset作成
+名前が一致しないRequired Checkを設定すると、CIが成功していてもMergeできなくなる可能性があります。
+
+## 7. 現在のCI内容
+
+Python matrixの各jobでは:
+
+- 全PowerShellスクリプト構文確認
+- `setup-github.ps1` UTF-8 BOM確認
+- 全shellスクリプト構文確認
+- Python依存インストール
+- `pip check`
+- Ruff lint
+- Ruff format check
+- pytest + Coverage 80%以上
+
+`windows-powershell-51` では:
+
+- Windows PowerShell 5.1で全 `.ps1` のParser確認
+- `setup-github.ps1` 初回Ruleset作成
 - 2回目実行で既存Ruleset更新
 - Ruleset重複なし
 
-このスクリプトを変更した場合、上記スモークテストも成功することを確認します。
+をモックGitHub CLIで確認します。
 
-## 6. 手動Import
+## 8. Windows PowerShell 5.1対応
 
-GitHub CLIを使わない場合は次のJSONを利用できます。
+`setup-github.ps1` はUTF-8 BOM付きで管理します。`.editorconfig` でもこのファイルだけ `utf-8-bom` を指定しています。
+
+このスクリプトを編集するときは文字コードをBOMなしUTF-8へ変換しないでください。CIが検出します。
+
+## 9. 手動Import
+
+GitHub CLIを使わない場合は:
 
 ```text
 github/protect-main.ruleset.json
 ```
 
-GitHub画面の目安:
+をGitHubのRulesets画面からImportできます。
 
 ```text
 Settings
@@ -139,41 +162,11 @@ New ruleset
 Import a ruleset
 ```
 
-Ruleset JSONだけではリポジトリ全体のMerge設定までは変更されません。手動の場合は `Settings` → `General` → `Pull Requests` も確認します。
+ただしRuleset JSONだけではリポジトリ全体のMerge設定は変更されません。`Settings` → `General` → `Pull Requests` も確認します。
 
-```text
-Allow merge commits                 OFF
-Allow squash merging                ON
-Allow rebase merging                OFF
-Allow auto-merge                    OFF
-Automatically delete head branches  ON
-```
+## 10. 設定後の確認
 
-## 7. CI名との関係
-
-Rulesetは次のStatus Check名を必須にしています。
-
-```text
-test (3.11)
-test (3.12)
-test (3.13)
-```
-
-`.github/workflows/ci.yml` のjob名やPython matrixを変更した場合は、`github/protect-main.ruleset.json` も同じPRで更新します。
-
-```mermaid
-flowchart LR
-    W["ci.yml job name"] --> R["Ruleset status context"]
-    R --> M["Merge allowed"]
-```
-
-名前がずれるとCIが成功していても必須チェックを解決できず、Mergeできなくなる可能性があります。
-
-## 8. 設定後の確認
-
-スクリプトの出力でRepository設定とRulesetを確認します。
-
-例:
+スクリプト出力例:
 
 ```text
 Repository settings:
@@ -183,28 +176,25 @@ Ruleset:
 {"id":123456,"name":"Protect main","enforcement":"active"}
 ```
 
-GitHub側でも `Settings` → `Rules` → `Rulesets` から `Protect main` がActiveであることを確認できます。
+GitHub画面では `Settings` → `Rules` → `Rulesets` から確認できます。
 
-## 9. 標準開発フロー
+## 11. 標準開発フロー
 
 ```mermaid
 flowchart LR
     I["日本語Issue"] --> B["Issue番号入りBranch"]
-    B --> W["Work / pytest"]
+    B --> W["Work / scripts/check"]
     W --> P["Pull Request"]
-    P --> C["CI 3 Python versions"]
+    P --> C["5 required checks"]
     C --> R["Conversation resolved"]
     R --> M["Squash Merge"]
-    M --> D["Issue Close / Branch delete"]
 ```
 
-詳細は [DEVELOPMENT.md](DEVELOPMENT.md) を参照してください。
-
-## 10. よくあるエラー
+## 12. よくあるエラー
 
 ### `gh` が見つからない
 
-GitHub CLIをインストールします。
+GitHub CLIを導入します。
 
 ### GitHubへログインしていない
 
@@ -218,17 +208,13 @@ gh auth login
 
 ### `Resource not accessible by integration`
 
-ChatGPT等のGitHub Appから操作する場合、そのAppのインストール対象へ対象リポジトリが含まれているか確認します。
+ChatGPT等のGitHub Appを使う場合、対象リポジトリがAppのRepository accessへ含まれているか確認します。
 
-### Ruleset APIが利用できない
+### CI追加後にMergeできない
 
-GitHubのプラン・所有者種別・権限等を確認し、必要なら手動Importを利用します。
+実際のCheck名とRuleset JSONを確認し、`setup-github.ps1` を再実行して既存Rulesetを同期します。
 
-### CI名変更後にMergeできない
-
-RulesetのRequired Status Check名と `.github/workflows/ci.yml` の実際のJob名を揃えます。
-
-## 11. 関連ドキュメント
+## 関連ドキュメント
 
 - [../GETTING-STARTED.md](../GETTING-STARTED.md)
 - [DEVELOPMENT.md](DEVELOPMENT.md)
