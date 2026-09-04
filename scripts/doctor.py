@@ -91,7 +91,10 @@ def diagnose(
         if resolved:
             add("PASS", f"{command} command: {resolved}")
         else:
-            add("WARN", f"{command} command が見つかりません。必要な機能を使う場合に導入してください。")
+            add(
+                "WARN",
+                f"{command} command が見つかりません。必要な機能を使う場合に導入してください。",
+            )
 
     failed = any(check["level"] == "FAIL" for check in checks)
     return {"checks": checks, "failed": failed}
