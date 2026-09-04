@@ -1,7 +1,14 @@
 #!/usr/bin/env sh
 set -eu
-if [ ! -x .venv/bin/python ]; then
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+REPO_ROOT=$(dirname "$SCRIPT_DIR")
+PYTHON="$REPO_ROOT/.venv/bin/python"
+
+if [ ! -x "$PYTHON" ]; then
   echo "Virtual environment not found. Run ./scripts/bootstrap.sh first." >&2
   exit 1
 fi
-exec .venv/bin/python run.py
+
+cd "$REPO_ROOT"
+exec "$PYTHON" run.py
