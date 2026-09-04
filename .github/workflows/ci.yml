@@ -74,6 +74,9 @@ jobs:
             requirements-dev.txt
             constraints.txt
 
+      - name: Diagnose template environment
+        run: python -m scripts.doctor
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
