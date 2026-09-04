@@ -60,6 +60,18 @@ def test_sampleless_smoke_test_protects_the_reusable_common_core():
     assert "Pull Request" in smoke_test
 
 
+def test_manual_smoke_test_keeps_real_world_third_party_findings():
+    smoke_test = read("docs/TEMPLATE-SMOKE-TEST.md")
+
+    assert "Rulesetは引き継がれません" in smoke_test
+    assert "GitHub連携のアクセス対象" in smoke_test
+    assert "別テンプレートの `setup-github.ps1`" in smoke_test
+    assert "次の未使用version" in smoke_test
+    assert "docs/OPERATIONS.md" in smoke_test
+    assert "docs/EXTENDING.md" in smoke_test
+    assert "merge後main CI" in smoke_test
+
+
 def test_main_guides_link_beginner_guidance_and_lifecycle_docs():
     readme = read("README.md")
     getting_started = read("GETTING-STARTED.md")
