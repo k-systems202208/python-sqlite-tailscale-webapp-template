@@ -4,7 +4,6 @@ from pathlib import Path
 from app import create_app
 from app.db import apply_migrations, get_db
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
