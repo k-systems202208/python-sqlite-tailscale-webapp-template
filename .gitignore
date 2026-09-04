@@ -2,10 +2,12 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.ruff_cache/
 .coverage
 htmlcov/
 .env
 data/
+backups/
 instance/
 *.db
 *.db-shm
