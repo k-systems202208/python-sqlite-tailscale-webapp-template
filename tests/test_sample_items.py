@@ -49,9 +49,7 @@ def test_sample_migration_is_discovered_from_feature_directory(app):
     assert any(
         version == 2
         and name == "sample_items"
-        and path.as_posix().endswith(
-            "app/features/items/migrations/002_sample_items.sql"
-        )
+        and path.as_posix().endswith("app/features/items/migrations/002_sample_items.sql")
         for version, name, path in migrations
     )
 
@@ -167,9 +165,7 @@ def test_legacy_version1_database_gets_sample_marker_without_data_loss(tmp_path)
             )
             """
         )
-        connection.execute(
-            "INSERT INTO schema_migrations (version, name) VALUES (1, 'initial')"
-        )
+        connection.execute("INSERT INTO schema_migrations (version, name) VALUES (1, 'initial')")
         user_id = connection.execute(
             "INSERT INTO users (login, display_name, identity_source) VALUES (?, ?, ?)",
             ("existing@example.com", "Existing", "local"),
@@ -194,9 +190,7 @@ def test_legacy_version1_database_gets_sample_marker_without_data_loss(tmp_path)
     with webapp.app_context():
         db = get_db()
         assert db.execute("SELECT title FROM items").fetchone()[0] == "Existing item"
-        rows = db.execute(
-            "SELECT version, name FROM schema_migrations ORDER BY version"
-        ).fetchall()
+        rows = db.execute("SELECT version, name FROM schema_migrations ORDER BY version").fetchall()
         assert [(row["version"], row["name"]) for row in rows] == [
             (1, "initial"),
             (2, "sample_items"),
