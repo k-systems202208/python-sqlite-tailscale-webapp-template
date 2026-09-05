@@ -32,6 +32,18 @@ def test_doctor_allows_missing_optional_setup(tmp_path):
     assert any("APP_DATA_DIR は未作成" in message for message in messages)
 
 
+def test_doctor_accepts_latest_supported_python(tmp_path):
+    root = make_repo(tmp_path)
+
+    result = diagnose(root=root, version_info=(3, 14, 1), which=lambda _command: None)
+
+    assert result["failed"] is False
+    assert any(
+        check["level"] == "PASS" and check["message"] == "Python 3.14.1"
+        for check in result["checks"]
+    )
+
+
 def test_doctor_reads_env_and_existing_data_dir(tmp_path):
     root = make_repo(tmp_path)
     data_dir = root / "runtime-data"
@@ -54,14 +66,30 @@ def test_doctor_reads_env_and_existing_data_dir(tmp_path):
     )
 
 
-def test_doctor_fails_unsupported_python(tmp_path):
+def test_doctor_fails_python_below_supported_range(tmp_path):
     root = make_repo(tmp_path)
 
     result = diagnose(root=root, version_info=(3, 10, 14), which=lambda _command: None)
 
     assert result["failed"] is True
     assert any(
-        check["level"] == "FAIL" and "Python 3.10.14 は対象外" in check["message"]
+        check["level"] == "FAIL"
+        and "Python 3.10.14 は対象外" in check["message"]
+        and "3.11〜3.14" in check["message"]
+        for check in result["checks"]
+    )
+
+
+def test_doctor_fails_python_above_supported_range(tmp_path):
+    root = make_repo(tmp_path)
+
+    result = diagnose(root=root, version_info=(3, 15, 0), which=lambda _command: None)
+
+    assert result["failed"] is True
+    assert any(
+        check["level"] == "FAIL"
+        and "Python 3.15.0 は対象外" in check["message"]
+        and "3.11〜3.14" in check["message"]
         for check in result["checks"]
     )
 
