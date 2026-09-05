@@ -75,3 +75,17 @@ def test_template_repository_setup_is_scoped_and_verifies_live_settings():
         assert fragment in script
 
     assert "派生アプリのWiki / Topicsは自動変更しません" in script
+
+
+def test_template_repository_setup_avoids_full_json_parsing_on_powershell_51():
+    script = (ROOT / "scripts" / "setup-template-repository.ps1").read_text(encoding="utf-8")
+
+    assert "ConvertFrom-Json" not in script
+    for jq_expression in [
+        '"--jq", ".permissions.admin"',
+        '"--jq", ".is_template"',
+        '"--jq", ".has_wiki"',
+        '"--jq", ".names[]"',
+        "strict_required_status_checks_policy",
+    ]:
+        assert jq_expression in script

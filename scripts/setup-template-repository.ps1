@@ -57,22 +57,28 @@ if ($Repository -notmatch '^[^/]+/[^/]+$') {
 }
 
 try {
-    $repositoryJson = Invoke-GhText @(
+    $isAdmin = Invoke-GhText @(
         "api",
         "-H", "X-GitHub-Api-Version: 2026-03-10",
-        "repos/$Repository"
+        "repos/$Repository",
+        "--jq", ".permissions.admin"
     )
-    $repositoryInfo = $repositoryJson | ConvertFrom-Json
+    $isTemplate = Invoke-GhText @(
+        "api",
+        "-H", "X-GitHub-Api-Version: 2026-03-10",
+        "repos/$Repository",
+        "--jq", ".is_template"
+    )
 }
 catch {
     Stop-WithMessage "Repository情報を取得できませんでした。`n$($_.Exception.Message)"
 }
 
-if (-not [bool]$repositoryInfo.permissions.admin) {
+if ($isAdmin -ne "true") {
     Stop-WithMessage "この設定には対象Repositoryの管理権限が必要です。"
 }
 
-if (-not [bool]$repositoryInfo.is_template) {
+if ($isTemplate -ne "true") {
     Stop-WithMessage "対象RepositoryはTemplate repositoryではありません。派生アプリのWiki / Topicsは自動変更しません。"
 }
 
@@ -127,56 +133,62 @@ Write-Host "  Topics applied: $($Topics -join ', ')" -ForegroundColor Green
 
 Write-Host "[4/4] Verify live repository settings" -ForegroundColor Yellow
 try {
-    $repositoryJson = Invoke-GhText @(
+    $hasWiki = Invoke-GhText @(
         "api",
         "-H", "X-GitHub-Api-Version: 2026-03-10",
-        "repos/$Repository"
+        "repos/$Repository",
+        "--jq", ".has_wiki"
     )
-    $repositoryInfo = $repositoryJson | ConvertFrom-Json
 
-    if ([bool]$repositoryInfo.has_wiki) {
+    if ($hasWiki -ne "false") {
         throw "Wikiが無効化されていません。"
     }
 
-    $topicsJson = Invoke-GhText @(
+    $topicsText = Invoke-GhText @(
         "api",
         "-H", "X-GitHub-Api-Version: 2026-03-10",
         "-H", "Accept: application/vnd.github+json",
-        "repos/$Repository/topics"
+        "repos/$Repository/topics",
+        "--jq", ".names[]"
     )
-    $topicInfo = $topicsJson | ConvertFrom-Json
-    $actualTopics = @($topicInfo.names | Sort-Object)
+
+    $actualTopics = @()
+    if (-not [string]::IsNullOrWhiteSpace($topicsText)) {
+        $actualTopics = @(
+            $topicsText -split [Environment]::NewLine |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+                Sort-Object
+        )
+    }
     $expectedTopics = @($Topics | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object)
 
     if (($actualTopics -join ",") -ne ($expectedTopics -join ",")) {
         throw "Topicsが期待値と一致しません。Actual: $($actualTopics -join ', ')"
     }
 
-    $rulesetsJson = Invoke-GhText @(
+    $rulesetId = Invoke-GhText @(
         "api",
         "-H", "X-GitHub-Api-Version: 2026-03-10",
-        "repos/$Repository/rulesets"
+        "repos/$Repository/rulesets",
+        "--jq", ".[] | select(.name == `"$RulesetName`") | .id"
     )
-    $rulesets = @($rulesetsJson | ConvertFrom-Json)
-    $ruleset = @($rulesets | Where-Object { $_.name -eq $RulesetName }) | Select-Object -First 1
 
-    if ($null -eq $ruleset) {
+    if ([string]::IsNullOrWhiteSpace($rulesetId)) {
         throw "Ruleset '$RulesetName' が見つかりません。"
     }
 
-    $rulesetDetailsJson = Invoke-GhText @(
+    $strictStatus = Invoke-GhText @(
         "api",
         "-H", "X-GitHub-Api-Version: 2026-03-10",
-        "repos/$Repository/rulesets/$($ruleset.id)"
+        "repos/$Repository/rulesets/$rulesetId",
+        "--jq", '.rules[] | select(.type == "required_status_checks") | .parameters.strict_required_status_checks_policy'
     )
-    $rulesetDetails = $rulesetDetailsJson | ConvertFrom-Json
-    $statusRule = @($rulesetDetails.rules | Where-Object { $_.type -eq "required_status_checks" }) | Select-Object -First 1
 
-    if ($null -eq $statusRule) {
+    if ([string]::IsNullOrWhiteSpace($strictStatus)) {
         throw "Required Status Checks ruleが見つかりません。"
     }
 
-    if (-not [bool]$statusRule.parameters.strict_required_status_checks_policy) {
+    if ($strictStatus -ne "true") {
         throw "Required Status ChecksがStrictではありません。"
     }
 }
