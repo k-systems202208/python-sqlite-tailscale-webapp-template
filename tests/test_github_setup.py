@@ -85,10 +85,13 @@ def test_template_repository_setup_avoids_full_json_parsing_on_powershell_51():
         '"--jq", ".permissions.admin"',
         '"--jq", ".is_template"',
         '"--jq", ".has_wiki"',
-        ".names | sort | join",
-        "strict_required_status_checks_policy",
+        ".names | sort | @tsv",
+        ".[] | [.id,.name] | @tsv",
+        ".rules[].parameters.strict_required_status_checks_policy // empty",
     ]:
         assert jq_expression in script
 
     assert "Invoke-GhText -Arguments" in script
     assert "$topicsText -split [Environment]::NewLine" not in script
+    assert ".names | sort | join" not in script
+    assert "select(.type ==" not in script
