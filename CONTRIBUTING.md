@@ -13,20 +13,34 @@
 7. 品質チェック、CI、差分を確認してからmainへ取り込みます。
 8. **原則Squash Merge**とします。
 9. README / docsへの影響は同じPRで最新化します。
+10. **CIがGreenであることだけを品質保証とせず、Issue / PRのVerification PlanでRiskと正しい状態を先に定義します。**
 
 ```mermaid
 flowchart LR
-    I["日本語Issue"] --> B["Issue番号入りBranch"]
+    I["日本語Issue + Verification Plan"] --> B["Issue番号入りBranch"]
     B --> W["実装 / docs / test"]
     W --> Q["scripts/check"]
     Q --> P["Pull Request"]
     P --> CI["GitHub Actions"]
-    CI --> M["Squash Merge"]
+    CI --> V["Risk / Oracle / Independent Verification確認"]
+    V --> M["Squash Merge"]
 ```
 
 ## Issue
 
 原則 **1 Issue = 1 PR** です。本文では最低限、目的・対応内容・影響範囲・完了条件を明確にします。
+
+さらに振る舞いや品質契約を変更する場合は、実装前に次を記載します。
+
+- Risk Level: Low / Medium / High
+- Important Risk: 何が壊れたら困るか
+- Correct State / Test Oracle: 何を正しい結果とするか
+- Verification Layer: どこで検証するか
+- Blocking Signal: 何が失敗したらMergeを止めるか
+- Falsification / Negative Case: 実装が誤っていたら失敗するケース
+- Independent Verification: 実装Loopと異なる評価軸
+
+詳細は [docs/QUALITY-VERIFICATION.md](docs/QUALITY-VERIFICATION.md) を参照してください。
 
 ## ブランチ命名
 
@@ -45,6 +59,8 @@ chore/70-update-dependencies
 
 - 対応Issue
 - 変更内容
+- Verification Plan
+- Greenが保証する範囲 / Greenだけでは保証しない範囲
 - テスト
 - 影響範囲
 - Migration / DB影響
@@ -60,6 +76,28 @@ Closes #123
 ```
 
 を利用します。Merge後の手動確認が完了条件として残る場合は、Issueを完了確認までOpenに保つ運用も可能です。
+
+## Verification Design
+
+AI / Coding AgentへProduction CodeとTest Codeの両方を任せても構いません。ただし、Agent自身の「テストが通ったので問題ありません」だけを最終Quality Gateにはしません。
+
+変更ごとに次を確認します。
+
+1. IssueでRiskとCorrect Stateを実装前に定義したか
+2. テストがそのRiskを本当に観測しているか
+3. Production CodeとTest Codeの辻褄を合わせるためにOracleを弱めていないか
+4. 正常系だけでなく境界値・異常系を検討したか
+5. High Risk変更にIndependent VerificationまたはHuman Judgmentがあるか
+
+High Riskの例:
+
+- 認証・認可
+- CSRF / セキュリティヘッダー
+- Migration / 既存データ
+- Backup / Restore
+- bind / Tailscale公開範囲
+- dependency major update
+- CI / Ruleset / release条件
 
 ## ローカル品質チェック
 
@@ -85,6 +123,8 @@ macOS / Linux:
 - pytest
 - Coverage 80%以上
 
+Coverageは重要なSignalですが、100%を目的にはしません。数値よりも、重要なRiskに対して意味のあるAssertion / Test Oracleがあることを優先します。
+
 ## CI
 
 GitHub Actionsは次を検証します。
@@ -92,10 +132,11 @@ GitHub Actionsは次を検証します。
 - Python 3.11 / 3.12 / 3.13 / 3.14
 - Ruff lint / format
 - pytest + Coverage
+- items削除後のsampleless smoke test
 - 全PowerShell / shellスクリプト構文
 - Windows PowerShell 5.1スモーク
 
-CI失敗中はMergeしません。
+CI失敗中はMergeしません。一方、CIがすべてGreenでも、Verification Planで定義したRiskを観測していない場合はMerge判断の根拠として不十分です。
 
 ## Migration変更
 
@@ -121,14 +162,17 @@ CI失敗中はMergeしません。
 - 日本語Issueがある
 - ブランチ名にIssue番号がある
 - mainへの直接変更ではない
+- Verification Planが変更内容に対応している
 - `scripts/check` または同等の品質確認が成功
 - GitHub Actions CIが成功
 - `.env` / `data/` / `backups/` / SQLite実データ / 秘密情報が含まれていない
 - 必要なテストがある
+- 振る舞い変更では境界値・異常系を検討した
 - Migrationの既存データ影響を確認した
 - 認証・認可を弱めていない
 - `0.0.0.0` へbindしていない
 - CSRF / セキュリティヘッダーを壊していない
+- High Risk変更でAIの自己確認だけに依存していない
 - README / docsが最新
 - Squash Mergeを選択している
 
@@ -140,6 +184,8 @@ CI失敗中はMergeしません。
 - 修正ドキュメント一覧
 - 修正または追加したテスト一覧
 - CI結果
+- 重要なRiskと、それを確認したVerification Signal
+- Greenだけでは未保証の範囲が残る場合はその内容
 
 ## Gitへ登録してはいけないもの
 
@@ -163,6 +209,7 @@ SQLiteデータベースファイル
 - [docs/CUSTOMIZING.md](docs/CUSTOMIZING.md)
 - [docs/SQLITE-SETUP.md](docs/SQLITE-SETUP.md)
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+- [docs/QUALITY-VERIFICATION.md](docs/QUALITY-VERIFICATION.md)
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 - [docs/GITHUB-SETUP.md](docs/GITHUB-SETUP.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)

@@ -4,8 +4,24 @@ Closes #
 ## 変更内容
 - 
 
+## Verification Plan
+
+詳細は `docs/QUALITY-VERIFICATION.md` を参照してください。
+
+- Risk Level: Low / Medium / High
+- Important Risk:
+- Correct State / Test Oracle:
+- Verification Layer: Static / Unit / Integration / Sampleless / Platform / Manual / Operations
+- Blocking Signal:
+- Falsification / Negative Case:
+- Independent Verification:
+- Greenが保証する範囲:
+- Greenだけでは保証しない範囲:
+
 ## テスト
 - [ ] `scripts/check.ps1` / `scripts/check.sh` または同等の品質チェックを実施した
+- [ ] Verification Planで定義したRiskを観測するテスト・確認を実施した
+- [ ] 振る舞い変更では正常系だけでなく境界値・異常系を検討した
 - [ ] 必要な手動確認を実施した
 
 ## 影響範囲
@@ -18,6 +34,7 @@ Closes #
 - `.env.example` 変更：あり / なし
 - `requirements` / `constraints` 変更：あり / なし
 - 認証・セキュリティへの影響：あり / なし
+- 既存Test Oracle / 契約テストの変更：あり / なし
 
 ## ドキュメント
 - README更新：必要 / 不要 / 更新済み
@@ -29,6 +46,8 @@ Closes #
 - [ ] mainへの直接Commit / Pushではない
 - [ ] CIが成功している
 - [ ] 意図しない差分がない
+- [ ] Production CodeとTest Codeを同時変更した場合、テストを通すためだけにOracleを弱めていない
+- [ ] High Risk変更ではAIの自己確認以外のIndependent Verification / Human Judgmentがある
 - [ ] `.env` / `data/` / `backups/` / 秘密情報が含まれていない
 - [ ] README / 関連docsが最新である
 - [ ] Squash Mergeでmainへ取り込む

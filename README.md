@@ -11,13 +11,14 @@ localhost限定のFlask / Waitress、Tailscale利用者識別、SQLite Migration
 ```mermaid
 flowchart LR
     A["Use this template / Clone"] --> D["doctor"]
-    D --> B["bootstrap"]
-    B --> C["共通core確認"]
+    D --> B["Issue + Verification Plan"]
+    B --> C["bootstrap / 共通core確認"]
     C --> S["必要ならitems sample確認"]
     S --> E["独自featureへ置換 / 追加"]
     E --> Q["doctor / Ruff / pytest / Coverage"]
     Q --> G["PR / CI"]
-    G --> H["Tailscale / 稼働PC / Operations"]
+    G --> V["Risk / Oracle / Independent Verification"]
+    V --> H["Tailscale / 稼働PC / Operations"]
 ```
 
 ## 共通基盤とサンプル
@@ -34,6 +35,7 @@ flowchart LR
 - `/`, `/healthz`, `/readyz`, `/api/me`
 - Ruff / pytest / Coverage / GitHub Actions CI
 - itemsサンプル削除後も成立するsampleless CI smoke test
+- Issue / PR Verification PlanとQuality Verification方針
 - Backup / Restoreと運用Runbook
 - feature拡張の共通契約
 
@@ -57,7 +59,7 @@ flowchart TD
     C --> C1["Auth / Security"]
     C --> C2["SQLite / Migration"]
     C --> C3["Tailscale / Backup / Operations"]
-    C --> C4["Doctor / Quality / CI"]
+    C --> C4["Doctor / Quality / CI / Verification"]
     C --> C5["Extension contract"]
     S --> S1["app/features/items/"]
 ```
@@ -253,18 +255,21 @@ GitHub ActionsではPython 3.11 / 3.12 / 3.13 / 3.14の各jobでdoctor、PowerSh
 
 Required Check名は `test (3.11)`〜`test (3.14)` と `windows-powershell-51` です。
 
+CIのGreenは重要なSignalですが、実際にIssueで定義したRiskを観測しているか、Greenだけでは未保証の範囲が残っていないかはPRのVerification Planで確認します。
+
 ## GitHub運用
 
 ```mermaid
 flowchart LR
-    I["日本語Issue"] --> B["Issue番号入りBranch"]
+    I["日本語Issue + Verification Plan"] --> B["Issue番号入りBranch"]
     B --> C["doctor / check"]
     C --> P["Pull Request"]
     P --> CI["GitHub Actions"]
-    CI --> M["Squash Merge"]
+    CI --> V["Risk / Oracle / Independent Verification"]
+    V --> M["Squash Merge"]
 ```
 
-Gitの用語やGitHub Desktopの操作自体が分からない場合は [BEGINNER-GUIDE.md](BEGINNER-GUIDE.md)、RulesetやRepository設定は [docs/GITHUB-SETUP.md](docs/GITHUB-SETUP.md) を参照してください。
+Gitの用語やGitHub Desktopの操作自体が分からない場合は [BEGINNER-GUIDE.md](BEGINNER-GUIDE.md)、Contributionルールは [CONTRIBUTING.md](CONTRIBUTING.md)、Risk・Test Oracle・Falsification・Independent Verificationの考え方は [docs/QUALITY-VERIFICATION.md](docs/QUALITY-VERIFICATION.md)、RulesetやRepository設定は [docs/GITHUB-SETUP.md](docs/GITHUB-SETUP.md) を参照してください。
 
 ## ドキュメント - 目的から選ぶ
 
@@ -275,6 +280,7 @@ flowchart TD
     Q{"何をしたい?"}
     Q -->|"Gitも初めて"| B["BEGINNER-GUIDE"]
     Q -->|"まず起動したい"| G["GETTING-STARTED"]
+    Q -->|"品質保証を設計したい"| V["QUALITY-VERIFICATION / CONTRIBUTING"]
     Q -->|"自分のアプリに変えたい"| C["CUSTOMIZING / EXTENDING"]
     Q -->|"テンプレートとして受入確認したい"| S["TEMPLATE-SMOKE-TEST"]
     Q -->|"技術を理解したい"| A["ARCHITECTURE / SQLITE / TAILSCALE / AUTH / SECURITY"]
@@ -286,6 +292,12 @@ flowchart TD
 
 - [BEGINNER-GUIDE.md](BEGINNER-GUIDE.md) - Git / GitHub / GitHub Desktopをゼロから説明し、最初のPRを練習
 - [GETTING-STARTED.md](GETTING-STARTED.md) - Clone後のセットアップと初回起動
+
+### 品質保証・開発ルール
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Issue / Branch / PR / MergeとVerification Planの運用ルール
+- [docs/QUALITY-VERIFICATION.md](docs/QUALITY-VERIFICATION.md) - Risk / Test Oracle / Test Layer / Falsification / Independent Verification
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) - 日常開発・品質ゲート・Gitフロー
 
 ### 自分のアプリへ変える・受入確認する
 
@@ -304,10 +316,6 @@ flowchart TD
 ### GitHubを安全に設定する
 
 - [docs/GITHUB-SETUP.md](docs/GITHUB-SETUP.md) - Ruleset / Required Check / Merge設定
-
-### 開発する
-
-- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) - 日常開発・品質ゲート・Gitフロー
 
 ### 稼働PCへ反映・運用する
 

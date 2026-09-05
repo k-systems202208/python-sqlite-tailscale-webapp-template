@@ -110,6 +110,26 @@ def test_manual_smoke_test_keeps_real_world_third_party_findings():
     assert "merge後main CI" in smoke_test
 
 
+def test_verification_design_is_part_of_issue_pr_and_contribution_contract():
+    quality = read("docs/QUALITY-VERIFICATION.md")
+    issue_template = read(".github/ISSUE_TEMPLATE/change-request.md")
+    pr_template = read(".github/pull_request_template.md")
+    contributing = read("CONTRIBUTING.md")
+
+    for content in [quality, issue_template, pr_template, contributing]:
+        assert "Verification Plan" in content
+        assert "Risk Level" in content
+        assert "Test Oracle" in content
+        assert "Independent Verification" in content
+
+    assert "Falsification" in quality
+    assert "Greenだけでは保証しない範囲" in pr_template
+    assert "High Risk" in quality
+    assert "Coverage 100%" in quality
+    assert "Mutation Testing" in quality
+    assert "QUALITY-VERIFICATION.md" in contributing
+
+
 def test_main_guides_link_beginner_guidance_and_lifecycle_docs():
     readme = read("README.md")
     getting_started = read("GETTING-STARTED.md")
