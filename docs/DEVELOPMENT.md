@@ -41,7 +41,7 @@ python -m scripts.doctor
 
 確認対象:
 
-- Python 3.11以上
+- Python 3.11〜3.14
 - Repository必須ファイル
 - `.venv`
 - `.env`
@@ -68,7 +68,7 @@ python3 -m scripts.doctor
 ./scripts/bootstrap.sh
 ```
 
-Python 3.11未満は拒否します。開発用bootstrapはruntime依存に加えてRuff / pytest / pytest-covを導入します。
+Python 3.11〜3.14をサポート対象とし、範囲外のVersionはdoctorで拒否します。開発用bootstrapはruntime依存に加えてRuff / pytest / pytest-covを導入します。
 
 ## 統一品質チェック
 
@@ -151,7 +151,7 @@ python -m ruff format .
 
 ## Coverage
 
-CIと `scripts/check` は `app` と `scripts.db_tools` を対象にCoverageを取得し、最低80%を要求します。doctorは専用単体テスト `tests/test_doctor.py` で入力条件ごとの診断を確認します。
+CIと `scripts/check` は `app` とPython utilityを含む `scripts` 全体をCoverage対象にし、最低80%を要求します。`pyproject.toml` の `[tool.coverage.run]` と実行コマンドで同じ対象を維持します。doctorは専用単体テスト `tests/test_doctor.py` で対応Versionを含む診断条件を確認します。
 
 新しい共通基盤をCoverage対象へ追加する場合、数値を満たすためだけのテストではなく意味のある分岐テストを優先します。
 
