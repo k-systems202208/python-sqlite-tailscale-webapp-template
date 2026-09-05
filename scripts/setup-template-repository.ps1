@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$Repository = "",
     [string]$RulesetName = "Protect main",
