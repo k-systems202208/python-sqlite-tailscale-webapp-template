@@ -23,7 +23,7 @@ def test_protect_main_ruleset_matches_template_policy():
     assert pull_request["allowed_merge_methods"] == ["squash"]
 
     checks = rules["required_status_checks"]["parameters"]
-    assert checks["strict_required_status_checks_policy"] is False
+    assert checks["strict_required_status_checks_policy"] is True
     assert checks["do_not_enforce_on_create"] is False
     assert {check["context"] for check in checks["required_status_checks"]} == {
         "test (3.11)",

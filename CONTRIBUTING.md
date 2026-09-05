@@ -42,6 +42,8 @@ flowchart LR
 
 詳細は [docs/QUALITY-VERIFICATION.md](docs/QUALITY-VERIFICATION.md) を参照してください。
 
+Security issueを報告する場合は、攻撃手順・token・秘密情報・実データをPublic Issueへ記載せず、[.github/SECURITY.md](.github/SECURITY.md) の報告手順を使用してください。
+
 ## ブランチ命名
 
 ```text
@@ -125,7 +127,7 @@ macOS / Linux:
 
 Coverageは重要なSignalですが、100%を目的にはしません。数値よりも、重要なRiskに対して意味のあるAssertion / Test Oracleがあることを優先します。
 
-## CI
+## CI / Supply Chain
 
 GitHub Actionsは次を検証します。
 
@@ -135,6 +137,11 @@ GitHub Actionsは次を検証します。
 - items削除後のsampleless smoke test
 - 全PowerShell / shellスクリプト構文
 - Windows PowerShell 5.1スモーク
+- Repository内Markdownリンク整合性
+
+外部GitHub Actionはfloating tagではなくfull commit SHAへ固定します。DependabotのGitHub Actions更新も通常PRとしてCIを通してから取り込みます。
+
+Protect main RulesetはRequired Status ChecksをStrictにし、mainが更新された場合は最新mainとの組み合わせを再確認してからMergeします。
 
 CI失敗中はMergeしません。一方、CIがすべてGreenでも、Verification Planで定義したRiskを観測していない場合はMerge判断の根拠として不十分です。
 
@@ -213,4 +220,5 @@ SQLiteデータベースファイル
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 - [docs/GITHUB-SETUP.md](docs/GITHUB-SETUP.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- [docs/SECURITY.md](docs/SECURITY.md)
+- [docs/SECURITY.md](docs/SECURITY.md) - 実装時のSecurity設計
+- [.github/SECURITY.md](.github/SECURITY.md) - 脆弱性報告ポリシー

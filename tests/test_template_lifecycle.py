@@ -1,10 +1,20 @@
+import json
+import re
 from pathlib import Path
+from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
 def read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
+
+
+def markdown_files() -> list[Path]:
+    files = list(ROOT.glob("*.md"))
+    files.extend((ROOT / "docs").rglob("*.md"))
+    files.extend((ROOT / ".github").rglob("*.md"))
+    return sorted(set(files))
 
 
 def test_doctor_is_part_of_local_and_ci_quality_flow():
@@ -128,6 +138,68 @@ def test_verification_design_is_part_of_issue_pr_and_contribution_contract():
     assert "Coverage 100%" in quality
     assert "Mutation Testing" in quality
     assert "QUALITY-VERIFICATION.md" in contributing
+
+
+def test_github_actions_are_pinned_and_ruleset_requires_up_to_date_branch():
+    ci = read(".github/workflows/ci.yml")
+    action_refs = re.findall(r"uses:\s+([^\s#]+)", ci)
+
+    assert action_refs
+    for action_ref in action_refs:
+        if action_ref.startswith("./"):
+            continue
+        assert re.fullmatch(r"[^@]+@[0-9a-f]{40}", action_ref), action_ref
+
+    ruleset = json.loads(read("github/protect-main.ruleset.json"))
+    status_rule = next(
+        rule for rule in ruleset["rules"] if rule["type"] == "required_status_checks"
+    )
+    assert status_rule["parameters"]["strict_required_status_checks_policy"] is True
+
+
+def test_security_policy_is_separate_from_security_design():
+    policy = read(".github/SECURITY.md")
+    design = read("docs/SECURITY.md")
+
+    assert "Reporting a vulnerability" in policy
+    assert "Public Issue" in policy
+    assert "docs/SECURITY.md" in policy
+    assert "セキュリティ境界" in design
+
+
+def test_repository_internal_markdown_links_resolve():
+    root = ROOT.resolve()
+    broken: list[str] = []
+
+    for source in markdown_files():
+        content = source.read_text(encoding="utf-8")
+        for raw_target in re.findall(r"!?\[[^\]]*\]\(([^)]+)\)", content):
+            target = raw_target.strip()
+            if target.startswith("<") and ">" in target:
+                target = target[1 : target.index(">")]
+            else:
+                target = target.split(maxsplit=1)[0]
+
+            if not target or target.startswith(
+                ("#", "/", "http://", "https://", "mailto:", "tel:")
+            ):
+                continue
+
+            target = unquote(target.split("#", 1)[0].split("?", 1)[0])
+            if not target:
+                continue
+
+            candidate = (source.parent / target).resolve()
+            try:
+                candidate.relative_to(root)
+            except ValueError:
+                broken.append(f"{source.relative_to(ROOT)} -> {raw_target} (outside repository)")
+                continue
+
+            if not candidate.exists():
+                broken.append(f"{source.relative_to(ROOT)} -> {raw_target}")
+
+    assert not broken, "Broken internal Markdown links:\n" + "\n".join(broken)
 
 
 def test_main_guides_link_beginner_guidance_and_lifecycle_docs():
