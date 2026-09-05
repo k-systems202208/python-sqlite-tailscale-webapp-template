@@ -3,7 +3,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_bootstrap_scripts_require_python_311_or_newer():
+def test_bootstrap_scripts_require_supported_python_range():
     for relative_path in [
         "scripts/bootstrap.ps1",
         "scripts/bootstrap.sh",
@@ -11,8 +11,8 @@ def test_bootstrap_scripts_require_python_311_or_newer():
         "scripts/bootstrap-runtime.sh",
     ]:
         script = (ROOT / relative_path).read_text(encoding="utf-8")
-        assert "3.11" in script
-        assert "sys.version_info >= (3, 11)" in script
+        assert "(3, 11) <= sys.version_info < (3, 15)" in script
+        assert "3.11-3.14" in script
 
 
 def test_dependency_files_use_constraints():

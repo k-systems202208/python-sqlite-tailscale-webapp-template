@@ -19,12 +19,21 @@ def test_supported_python_range_matches_ci_matrix():
     doctor = read("scripts/doctor.py")
     ci = read(".github/workflows/ci.yml")
     getting_started = read("GETTING-STARTED.md")
+    bootstrap_scripts = [
+        read("scripts/bootstrap.ps1"),
+        read("scripts/bootstrap.sh"),
+        read("scripts/bootstrap-runtime.ps1"),
+        read("scripts/bootstrap-runtime.sh"),
+    ]
 
     assert 'requires-python = ">=3.11,<3.15"' in pyproject
     assert "SUPPORTED_PYTHON_MIN = (3, 11)" in doctor
     assert "SUPPORTED_PYTHON_MAX_EXCLUSIVE = (3, 15)" in doctor
     assert 'python-version: ["3.11", "3.12", "3.13", "3.14"]' in ci
     assert "Python 3.11〜3.14" in getting_started
+    for script in bootstrap_scripts:
+        assert "(3, 11) <= sys.version_info < (3, 15)" in script
+        assert "3.11-3.14" in script
 
 
 def test_coverage_targets_match_configuration_and_local_ci_commands():
