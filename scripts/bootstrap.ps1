@@ -4,12 +4,12 @@ $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptRoot
 
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
-    throw "Python 3.11+ was not found in PATH."
+    throw "Python 3.11-3.14 was not found in PATH."
 }
 
-& python -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)"
+& python -c "import sys; raise SystemExit(0 if (3, 11) <= sys.version_info < (3, 15) else 1)"
 if ($LASTEXITCODE -ne 0) {
-    throw "Python 3.11 or newer is required."
+    throw "Python 3.11-3.14 is required."
 }
 
 Push-Location $repoRoot
