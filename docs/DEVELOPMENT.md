@@ -8,14 +8,15 @@ Git / GitHub / GitHub Desktopの基本用語や、CommitとPushの違い、Pull 
 
 ```mermaid
 flowchart LR
-    I["日本語Issue"] --> D["doctor"]
+    I["日本語Issue + Verification Plan"] --> D["doctor"]
     D --> B["Issue番号入りBranch"]
     B --> W["実装 / docs / test"]
     W --> Q["scripts/check"]
     Q --> P["Commit / Push"]
     P --> R["Pull Request"]
     R --> C["GitHub Actions"]
-    C --> M["Squash Merge"]
+    C --> V["Risk / Oracle / Independent Verification確認"]
+    V --> M["Squash Merge"]
 ```
 
 必須ルール:
@@ -28,8 +29,27 @@ flowchart LR
 6. CI成功と差分を確認
 7. Squash Merge
 8. README / docsへの影響を同じPRで更新
+9. 振る舞い・品質契約を変える変更では、Issue / PRにVerification Planを記載
 
 詳細は [../CONTRIBUTING.md](../CONTRIBUTING.md) を参照してください。
+
+## Verification Design
+
+**CIがGreenであることは品質そのものではなく、定義済みの評価条件を満たしたSignalです。**
+
+変更を始める前に、Issueで最低限次を定義します。
+
+- Risk Level: Low / Medium / High
+- Important Risk: 何が壊れたら困るか
+- Correct State / Test Oracle: 何を正しい状態とするか
+- Verification Layer: Static / Unit / Integration / Sampleless / Platform / Manual / Operations
+- Blocking Signal: 何が失敗したらMergeを止めるか
+- Falsification / Negative Case: 実装が誤っていたら失敗するケース
+- Independent Verification: 実装Loopと異なる評価軸
+
+AI / Coding Agentへ実装とテストの両方を任せても構いませんが、AI自身の「テストが通ったので問題ありません」だけを最終Quality Gateにはしません。High Risk変更では、人間のJudgmentまたは実装Loopとは異なる受入観点を残します。
+
+詳細なRisk Level、Test Layer、Coverageの扱い、Mutation Testingを標準必須化しない理由は [QUALITY-VERIFICATION.md](QUALITY-VERIFICATION.md) を参照してください。
 
 ## Doctor
 
@@ -95,7 +115,7 @@ flowchart LR
     T --> C["Coverage >= 80%"]
 ```
 
-AIへ作業を依頼するときも、doctorにFAILがなく `scripts/check` が成功することをローカル完了条件として扱います。
+AIへ作業を依頼するときも、doctorにFAILがなく `scripts/check` が成功することをローカル完了条件として扱います。ただし、そのGreenがIssueで定義したRiskを観測していることを別途確認します。
 
 ## CI
 
@@ -132,6 +152,8 @@ flowchart TD
 
 Ruleset定義のRequired Status Check名は `test (3.11)`〜`test (3.14)` と `windows-powershell-51` のままです。sampleless smoke testは既存Python job内へ追加するため、Ruleset名の変更は不要です。
 
+CIは重要なBlocking Signalですが、すべてGreenでもVerification PlanのRiskを観測していない場合はMerge判断の根拠として不十分です。
+
 ## Ruff
 
 設定は `pyproject.toml` に集約しています。
@@ -153,7 +175,7 @@ python -m ruff format .
 
 CIと `scripts/check` は `app` とPython utilityを含む `scripts` 全体をCoverage対象にし、最低80%を要求します。`pyproject.toml` の `[tool.coverage.run]` と実行コマンドで同じ対象を維持します。doctorは専用単体テスト `tests/test_doctor.py` で対応Versionを含む診断条件を確認します。
 
-新しい共通基盤をCoverage対象へ追加する場合、数値を満たすためだけのテストではなく意味のある分岐テストを優先します。
+Coverageは「コードが実行された範囲」のSignalであり、正しいAssertion / Test Oracleの存在そのものは保証しません。100%を目的化せず、重要なRiskに対する意味のある分岐テストを優先します。
 
 ## 共通基盤とfeatureの開発境界
 
@@ -231,7 +253,7 @@ tests/test_template_lifecycle.py 開発・運用・拡張・smoke契約
 
 items featureが存在しない場合、sample testは自動skipされます。そのため `app/features/items/` を削除した状態でも共通基盤の品質チェックとCIを維持できます。
 
-独自featureを追加したら、正常系に加えて不正入力、他利用者データ操作拒否、CSRF、Migration適用 / 再実行、必要なデータ互換性を確認します。
+独自featureを追加したら、正常系に加えて不正入力、他利用者データ操作拒否、CSRF、Migration適用 / 再実行、必要なデータ互換性を確認します。振る舞い変更では「実装が誤っていたら失敗する」Falsification観点を最低1つ検討します。
 
 ## 依存関係
 
@@ -262,6 +284,8 @@ chore/70-update-dependencies
 
 - 対応Issue
 - 変更内容
+- Verification Plan
+- Greenが保証する範囲 / Greenだけでは保証しない範囲
 - テスト
 - 影響範囲
 - Migration有無
@@ -277,6 +301,7 @@ GitHub DesktopでBranch作成からPR作成までの具体的な操作を確認�
 - 日本語Issueがある
 - BranchにIssue番号がある
 - PRとIssueが関連付いている
+- Verification Planが変更内容に対応している
 - doctorにFAILがない
 - `scripts/check` または同等の品質確認が成功
 - GitHub Actionsが成功
@@ -285,6 +310,7 @@ GitHub DesktopでBranch作成からPR作成までの具体的な操作を確認�
 - Migration変更のデータ影響を確認した
 - 認証・認可を弱めていない
 - `127.0.0.1` 制約を壊していない
+- High Risk変更でAIの自己確認だけに依存していない
 - README / docsが最新
 - Squash Mergeを選択している
 
@@ -300,3 +326,5 @@ Merge後に稼働PCへ反映する場合は [DEPLOYMENT.md](DEPLOYMENT.md) へ�
 2. 修正ドキュメント
 3. 修正・追加テスト
 4. CI結果
+5. 重要なRiskと、それを確認したVerification Signal
+6. Greenだけでは未保証の範囲が残る場合はその内容
