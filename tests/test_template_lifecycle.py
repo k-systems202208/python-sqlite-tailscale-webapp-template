@@ -14,6 +14,35 @@ def test_doctor_is_part_of_local_and_ci_quality_flow():
     assert "python -m scripts.doctor" in read(".github/workflows/ci.yml")
 
 
+def test_supported_python_range_matches_ci_matrix():
+    pyproject = read("pyproject.toml")
+    doctor = read("scripts/doctor.py")
+    ci = read(".github/workflows/ci.yml")
+    getting_started = read("GETTING-STARTED.md")
+
+    assert 'requires-python = ">=3.11,<3.15"' in pyproject
+    assert "SUPPORTED_PYTHON_MIN = (3, 11)" in doctor
+    assert "SUPPORTED_PYTHON_MAX_EXCLUSIVE = (3, 15)" in doctor
+    assert 'python-version: ["3.11", "3.12", "3.13", "3.14"]' in ci
+    assert "Python 3.11〜3.14" in getting_started
+
+
+def test_coverage_targets_match_configuration_and_local_ci_commands():
+    pyproject = read("pyproject.toml")
+    ci = read(".github/workflows/ci.yml")
+    check_ps1 = read("scripts/check.ps1")
+    check_sh = read("scripts/check.sh")
+    development = read("docs/DEVELOPMENT.md")
+
+    assert 'source = ["app", "scripts"]' in pyproject
+    assert "--cov=app" in ci
+    assert "--cov=scripts" in ci
+    assert "--cov=scripts.db_tools" not in ci
+    assert "--cov=scripts" in check_ps1
+    assert "--cov=scripts" in check_sh
+    assert "`app` とPython utilityを含む `scripts` 全体" in development
+
+
 def test_operations_runbook_uses_existing_health_and_recovery_tools():
     operations = read("docs/OPERATIONS.md")
 

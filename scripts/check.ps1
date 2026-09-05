@@ -22,7 +22,7 @@ try {
     & $python -m ruff format --check .
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-    & $python -m pytest --cov=app --cov=scripts.db_tools --cov-report=term-missing --cov-fail-under=80
+    & $python -m pytest --cov=app --cov=scripts --cov-report=term-missing --cov-fail-under=80
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 finally {

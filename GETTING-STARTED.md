@@ -26,13 +26,13 @@ flowchart TD
 
 - GitHubアカウント
 - Git
-- Python 3.11以上
+- Python 3.11〜3.14
 - GitHub Desktop（推奨）
 - GitHub CLI（GitHub推奨設定を自動化する場合）
 - ChatGPTまたはCodex
 - Tailscale（別端末から利用する場合）
 
-CIではPython 3.11 / 3.12 / 3.13 / 3.14を確認しています。
+CIでもPython 3.11 / 3.12 / 3.13 / 3.14を確認しており、この4系統をサポート対象とします。
 
 ```powershell
 python --version
@@ -62,7 +62,7 @@ python -m scripts.doctor
 
 主な確認項目:
 
-- Python 3.11以上
+- Python 3.11〜3.14
 - `pyproject.toml` / `requirements.txt` / `constraints.txt` / `.env.example`
 - `.venv`
 - `.env`
@@ -269,7 +269,7 @@ flowchart LR
     C --> T["pytest + coverage >= 80%"]
 ```
 
-変更の区切りごとに `scripts/check.ps1` または `scripts/check.sh` を実行します。check script内でもdoctorを先に実行します。
+変更の区切りごとに `scripts/check.ps1` または `scripts/check.sh` を実行します。check script内でもdoctorを先に実行します。Coverageは `app` とPython utilityを含む `scripts` 全体を対象にします。
 
 ## 14. ChatGPT / Codex
 

@@ -96,7 +96,7 @@ jobs:
         run: >-
           python -m pytest
           --cov=app
-          --cov=scripts.db_tools
+          --cov=scripts
           --cov-report=term-missing
           --cov-fail-under=80
 
@@ -107,7 +107,7 @@ jobs:
           rm -rf app/features/items
           python -m pytest \
             --cov=app \
-            --cov=scripts.db_tools \
+            --cov=scripts \
             --cov-report=term-missing \
             --cov-fail-under=80
 

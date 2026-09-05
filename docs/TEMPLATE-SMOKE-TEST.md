@@ -17,7 +17,7 @@ app/features/items/
 削除後に共通テストを再実行します。
 
 ```text
-python -m pytest --cov=app --cov=scripts.db_tools --cov-report=term-missing --cov-fail-under=80
+python -m pytest --cov=app --cov=scripts --cov-report=term-missing --cov-fail-under=80
 ```
 
 `tests/test_sample_items.py` はitems featureが無い場合にskipされ、core、認証、Migration、doctor、DB tools等が引き続き成功することを確認します。
