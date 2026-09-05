@@ -151,7 +151,9 @@ def test_github_actions_are_pinned_and_ruleset_requires_up_to_date_branch():
         assert re.fullmatch(r"[^@]+@[0-9a-f]{40}", action_ref), action_ref
 
     ruleset = json.loads(read("github/protect-main.ruleset.json"))
-    status_rule = next(rule for rule in ruleset["rules"] if rule["type"] == "required_status_checks")
+    status_rule = next(
+        rule for rule in ruleset["rules"] if rule["type"] == "required_status_checks"
+    )
     assert status_rule["parameters"]["strict_required_status_checks_policy"] is True
 
 
@@ -178,7 +180,9 @@ def test_repository_internal_markdown_links_resolve():
             else:
                 target = target.split(maxsplit=1)[0]
 
-            if not target or target.startswith(("#", "/", "http://", "https://", "mailto:", "tel:")):
+            if not target or target.startswith(
+                ("#", "/", "http://", "https://", "mailto:", "tel:")
+            ):
                 continue
 
             target = unquote(target.split("#", 1)[0].split("?", 1)[0])
