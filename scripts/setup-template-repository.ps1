@@ -45,7 +45,7 @@ if ($LASTEXITCODE -ne 0) {
 
 if ([string]::IsNullOrWhiteSpace($Repository)) {
     try {
-        $Repository = Invoke-GhText @("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
+        $Repository = Invoke-GhText -Arguments @("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
     }
     catch {
         Stop-WithMessage "現在のフォルダーからGitHubリポジトリを判定できませんでした。-Repository owner/repository を指定してください。"
@@ -57,13 +57,13 @@ if ($Repository -notmatch '^[^/]+/[^/]+$') {
 }
 
 try {
-    $isAdmin = Invoke-GhText @(
+    $isAdmin = Invoke-GhText -Arguments @(
         "api",
         "-H", "X-GitHub-Api-Version: 2026-03-10",
         "repos/$Repository",
         "--jq", ".permissions.admin"
     )
-    $isTemplate = Invoke-GhText @(
+    $isTemplate = Invoke-GhText -Arguments @(
         "api",
         "-H", "X-GitHub-Api-Version: 2026-03-10",
         "repos/$Repository",
@@ -95,7 +95,7 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "[2/4] Disable Wiki on template repository" -ForegroundColor Yellow
 try {
-    Invoke-GhText @(
+    Invoke-GhText -Arguments @(
         "api",
         "--method", "PATCH",
         "-H", "X-GitHub-Api-Version: 2026-03-10",
@@ -124,7 +124,7 @@ try {
         }
     }
 
-    Invoke-GhText $topicArguments | Out-Null
+    Invoke-GhText -Arguments $topicArguments | Out-Null
 }
 catch {
     Stop-WithMessage "Topics設定の更新に失敗しました。`n$($_.Exception.Message)"
@@ -133,7 +133,7 @@ Write-Host "  Topics applied: $($Topics -join ', ')" -ForegroundColor Green
 
 Write-Host "[4/4] Verify live repository settings" -ForegroundColor Yellow
 try {
-    $hasWiki = Invoke-GhText @(
+    $hasWiki = Invoke-GhText -Arguments @(
         "api",
         "-H", "X-GitHub-Api-Version: 2026-03-10",
         "repos/$Repository",
@@ -143,30 +143,24 @@ try {
     if ($hasWiki -ne "false") {
         throw "Wikiが無効化されていません。"
     }
+    Write-Host "  Wiki verification: OK" -ForegroundColor Green
 
-    $topicsText = Invoke-GhText @(
+    $actualTopicsText = Invoke-GhText -Arguments @(
         "api",
         "-H", "X-GitHub-Api-Version: 2026-03-10",
         "-H", "Accept: application/vnd.github+json",
         "repos/$Repository/topics",
-        "--jq", ".names[]"
+        "--jq", '.names | sort | join(",")'
     )
+    $expectedTopics = @($Topics | Where-Object { $_ -and $_.Trim().Length -gt 0 } | Sort-Object)
+    $expectedTopicsText = $expectedTopics -join ","
 
-    $actualTopics = @()
-    if (-not [string]::IsNullOrWhiteSpace($topicsText)) {
-        $actualTopics = @(
-            $topicsText -split [Environment]::NewLine |
-                Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-                Sort-Object
-        )
+    if ($actualTopicsText -ne $expectedTopicsText) {
+        throw "Topicsが期待値と一致しません。Actual: $actualTopicsText"
     }
-    $expectedTopics = @($Topics | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object)
+    Write-Host "  Topics verification: OK" -ForegroundColor Green
 
-    if (($actualTopics -join ",") -ne ($expectedTopics -join ",")) {
-        throw "Topicsが期待値と一致しません。Actual: $($actualTopics -join ', ')"
-    }
-
-    $rulesetId = Invoke-GhText @(
+    $rulesetId = Invoke-GhText -Arguments @(
         "api",
         "-H", "X-GitHub-Api-Version: 2026-03-10",
         "repos/$Repository/rulesets",
@@ -177,7 +171,7 @@ try {
         throw "Ruleset '$RulesetName' が見つかりません。"
     }
 
-    $strictStatus = Invoke-GhText @(
+    $strictStatus = Invoke-GhText -Arguments @(
         "api",
         "-H", "X-GitHub-Api-Version: 2026-03-10",
         "repos/$Repository/rulesets/$rulesetId",
@@ -191,6 +185,7 @@ try {
     if ($strictStatus -ne "true") {
         throw "Required Status ChecksがStrictではありません。"
     }
+    Write-Host "  Strict verification: OK" -ForegroundColor Green
 }
 catch {
     Stop-WithMessage "実Repository設定の確認に失敗しました。`n$($_.Exception.Message)"
