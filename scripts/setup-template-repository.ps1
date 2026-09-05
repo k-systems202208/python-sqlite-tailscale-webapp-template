@@ -150,22 +150,33 @@ try {
         "-H", "X-GitHub-Api-Version: 2026-03-10",
         "-H", "Accept: application/vnd.github+json",
         "repos/$Repository/topics",
-        "--jq", '.names | sort | join(",")'
+        "--jq", '.names | sort | @tsv'
     )
     $expectedTopics = @($Topics | Where-Object { $_ -and $_.Trim().Length -gt 0 } | Sort-Object)
-    $expectedTopicsText = $expectedTopics -join ","
+    $expectedTopicsText = $expectedTopics -join "`t"
 
     if ($actualTopicsText -ne $expectedTopicsText) {
         throw "Topicsが期待値と一致しません。Actual: $actualTopicsText"
     }
     Write-Host "  Topics verification: OK" -ForegroundColor Green
 
-    $rulesetId = Invoke-GhText -Arguments @(
+    $rulesetRows = Invoke-GhText -Arguments @(
         "api",
         "-H", "X-GitHub-Api-Version: 2026-03-10",
         "repos/$Repository/rulesets",
-        "--jq", ".[] | select(.name == `"$RulesetName`") | .id"
+        "--jq", '.[] | [.id,.name] | @tsv'
     )
+    $rulesetId = ""
+    foreach ($row in @($rulesetRows -split '\r?\n')) {
+        if ([string]::IsNullOrWhiteSpace($row)) {
+            continue
+        }
+        $columns = @($row -split "`t", 2)
+        if ($columns.Count -eq 2 -and $columns[1] -eq $RulesetName) {
+            $rulesetId = [string]$columns[0]
+            break
+        }
+    }
 
     if ([string]::IsNullOrWhiteSpace($rulesetId)) {
         throw "Ruleset '$RulesetName' が見つかりません。"
@@ -175,7 +186,7 @@ try {
         "api",
         "-H", "X-GitHub-Api-Version: 2026-03-10",
         "repos/$Repository/rulesets/$rulesetId",
-        "--jq", '.rules[] | select(.type == "required_status_checks") | .parameters.strict_required_status_checks_policy'
+        "--jq", '.rules[].parameters.strict_required_status_checks_policy // empty'
     )
 
     if ([string]::IsNullOrWhiteSpace($strictStatus)) {
