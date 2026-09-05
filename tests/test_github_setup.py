@@ -49,3 +49,29 @@ def test_setup_script_applies_repository_policy():
 
     for fragment in required_fragments:
         assert fragment in script
+
+
+def test_template_repository_setup_is_scoped_and_verifies_live_settings():
+    path = ROOT / "scripts" / "setup-template-repository.ps1"
+    assert path.is_file()
+
+    script = path.read_text(encoding="utf-8")
+    required_fragments = [
+        "setup-github.ps1",
+        "permissions.admin",
+        "is_template",
+        "has_wiki=false",
+        "repos/$Repository/topics",
+        "strict_required_status_checks_policy",
+        '"python"',
+        '"flask"',
+        '"sqlite"',
+        '"tailscale"',
+        '"webapp-template"',
+        '"starter-template"',
+    ]
+
+    for fragment in required_fragments:
+        assert fragment in script
+
+    assert "派生アプリのWiki / Topicsは自動変更しません" in script
