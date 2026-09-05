@@ -14,6 +14,8 @@ REQUIRED_FILES = (
     ".env.example",
 )
 OPTIONAL_TOOLS = ("git", "gh", "tailscale")
+SUPPORTED_PYTHON_MIN = (3, 11)
+SUPPORTED_PYTHON_MAX_EXCLUSIVE = (3, 15)
 
 
 def parse_env(text: str) -> dict[str, str]:
@@ -48,8 +50,8 @@ def diagnose(
 
     version = tuple(version_info or sys.version_info[:3])
     version_text = ".".join(str(part) for part in version[:3])
-    if version < (3, 11):
-        add("FAIL", f"Python {version_text} は対象外です。3.11以上を使用してください。")
+    if version < SUPPORTED_PYTHON_MIN or version >= SUPPORTED_PYTHON_MAX_EXCLUSIVE:
+        add("FAIL", f"Python {version_text} は対象外です。3.11〜3.14を使用してください。")
     else:
         add("PASS", f"Python {version_text}")
 
