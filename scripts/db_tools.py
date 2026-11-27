@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 import sqlite3
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -25,8 +26,9 @@ def quick_check(database: Path) -> str:
     if not database.exists():
         raise FileNotFoundError(f"Database not found: {database}")
 
-    with sqlite3.connect(database) as connection:
-        row = connection.execute("PRAGMA quick_check").fetchone()
+    with closing(sqlite3.connect(database)) as connection:
+        with connection:
+            row = connection.execute("PRAGMA quick_check").fetchone()
 
     result = row[0] if row else ""
     if result != "ok":
@@ -50,8 +52,9 @@ def backup_database(
     name = prefix or database.stem
     destination = backup_dir / f"{name}-{timestamp}.db"
 
-    with sqlite3.connect(database) as source, sqlite3.connect(destination) as target:
-        source.backup(target)
+    with closing(sqlite3.connect(database)) as source:
+        with closing(sqlite3.connect(destination)) as target:
+            source.backup(target)
 
     quick_check(destination)
     return destination
@@ -82,8 +85,9 @@ def restore_database(
 
     temporary = database.with_name(f".{database.name}.restore-{uuid4().hex}.tmp")
     try:
-        with sqlite3.connect(backup) as source, sqlite3.connect(temporary) as target:
-            source.backup(target)
+        with closing(sqlite3.connect(backup)) as source:
+            with closing(sqlite3.connect(temporary)) as target:
+                source.backup(target)
         quick_check(temporary)
         _remove_sqlite_sidecars(database)
         os.replace(temporary, database)
