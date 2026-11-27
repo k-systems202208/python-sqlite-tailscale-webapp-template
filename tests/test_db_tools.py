@@ -1,5 +1,6 @@
 import sqlite3
 import sys
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -8,15 +9,17 @@ from scripts import db_tools
 
 
 def _create_database(path: Path) -> None:
-    with sqlite3.connect(path) as connection:
-        connection.execute("CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)")
-        connection.execute("INSERT INTO notes (body) VALUES ('first')")
-        connection.commit()
+    with closing(sqlite3.connect(path)) as connection:
+        with connection:
+            connection.execute("CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)")
+            connection.execute("INSERT INTO notes (body) VALUES ('first')")
+            connection.commit()
 
 
 def _note_count(path: Path) -> int:
-    with sqlite3.connect(path) as connection:
-        return connection.execute("SELECT COUNT(*) FROM notes").fetchone()[0]
+    with closing(sqlite3.connect(path)) as connection:
+        with connection:
+            return connection.execute("SELECT COUNT(*) FROM notes").fetchone()[0]
 
 
 def test_default_database_path_uses_app_data_dir(tmp_path, monkeypatch):
@@ -34,14 +37,28 @@ def test_backup_check_and_restore(tmp_path):
     assert backup.exists()
     assert db_tools.quick_check(backup) == "ok"
 
-    with sqlite3.connect(database) as connection:
-        connection.execute("INSERT INTO notes (body) VALUES ('second')")
-        connection.commit()
+    with closing(sqlite3.connect(database)) as connection:
+        with connection:
+            connection.execute("INSERT INTO notes (body) VALUES ('second')")
+            connection.commit()
     assert _note_count(database) == 2
 
     safety = db_tools.restore_database(backup, database, safety_backup_dir=backup_dir)
     assert safety is not None and safety.exists()
     assert _note_count(safety) == 2
+    assert _note_count(database) == 1
+    assert db_tools.quick_check(database) == "ok"
+
+
+def test_restore_rejects_invalid_backup_without_replacing_database(tmp_path):
+    database = tmp_path / "app.db"
+    backup = tmp_path / "invalid.db"
+    _create_database(database)
+    backup.write_bytes(b"not a SQLite database")
+
+    with pytest.raises(sqlite3.DatabaseError):
+        db_tools.restore_database(backup, database, safety_backup_dir=tmp_path / "backups")
+
     assert _note_count(database) == 1
     assert db_tools.quick_check(database) == "ok"
 
@@ -94,9 +111,10 @@ def test_cli_backup_check_and_restore(tmp_path, monkeypatch, capsys):
     assert db_tools.main() == 0
     assert "SQLite quick_check: ok" in capsys.readouterr().out
 
-    with sqlite3.connect(database) as connection:
-        connection.execute("INSERT INTO notes (body) VALUES ('second')")
-        connection.commit()
+    with closing(sqlite3.connect(database)) as connection:
+        with connection:
+            connection.execute("INSERT INTO notes (body) VALUES ('second')")
+            connection.commit()
 
     monkeypatch.setattr(
         sys,
